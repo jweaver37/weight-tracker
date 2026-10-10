@@ -14,6 +14,7 @@ import { roundTo, volumeFromDisplay, volumeLabel, volumeToDisplay, weightFromDis
 import { checkMilestones } from '../milestones.js';
 import { looksLikeApiKey } from '../../data/usda.js';
 import { usageMeter } from '../usageMeter.js';
+import { FOLLOWED_DIETS } from '../../core/diet.js';
 
 // `focus` scrolls to a section, e.g. #/settings/bmr from the Today screen.
 export async function renderSettings(view, { onDataReplaced, focus }) {
@@ -28,6 +29,7 @@ export async function renderSettings(view, { onDataReplaced, focus }) {
     h('header', { class: 'page-head' }, h('h1', {}, 'Settings')),
     profileSection(rerender, breakdown),
     waterSection(),
+    dietSection(rerender),
     goalsSection(points[0]),
     nutrientsSection(),
     customFieldsSection(customFields, rerender),
@@ -146,6 +148,34 @@ function nutrientsSection() {
     h('p', { class: 'muted' }, 'Every nutrient you enter is saved; this only controls what is shown.'),
     h('div', { class: 'check-grid' }, NUTRIENTS.filter((n) => n.group === 'label').map(box)),
     h('details', {}, h('summary', {}, 'Vitamins & minerals'), h('div', { class: 'check-grid' }, NUTRIENTS.filter((n) => n.group === 'micro').map(box))));
+}
+
+function dietSection(rerender) {
+  const d = state.settings.diet;
+  const follow = h('select', { 'aria-label': 'Your diet' },
+    h('option', { value: '', selected: !d.follow }, 'Any / None'),
+    FOLLOWED_DIETS.map((x) => h('option', { value: x.key, selected: x.key === d.follow }, x.label)));
+  follow.addEventListener('change', async () => {
+    await saveSettings({ ...state.settings, diet: { ...state.settings.diet, follow: follow.value || null } });
+    rerender();
+  });
+  const chosen = FOLLOWED_DIETS.find((x) => x.key === d.follow);
+
+  let meatFree = null;
+  if (d.follow === 'flexitarian') {
+    meatFree = presetPicker([3, 4, 5, 6], d.meatFreeDays, { unit: 'of 7 days', max: 7 });
+    meatFree.el.addEventListener('change', async () => {
+      const v = meatFree.read();
+      if (v) await saveSettings({ ...state.settings, diet: { ...state.settings.diet, meatFreeDays: Math.round(v) } });
+    });
+  }
+
+  return h('section', { class: 'card form-grid' },
+    h('h2', {}, 'Your diet'),
+    h('p', { class: 'muted' }, 'Choose a diet if you follow one. Not following one? Leave it on Any / None.'),
+    field('I follow', follow, chosen?.note),
+    meatFree && field('Meat-free days goal', meatFree.el,
+      'A “Meat-free days” ring appears in this week’s circle on the Goals tab. A day counts when you logged food and none of it contained meat, poultry or fish.'));
 }
 
 function foodDatabaseSection(rerender) {

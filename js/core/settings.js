@@ -21,6 +21,8 @@ export function defaultSettings() {
     goals: defaultGoals(),
     rings: { daysPerWeek: 5 }, // days a week the "on target" weekly rings ask for
     usda: { apiKey: '' }, // blank = shared DEMO_KEY
+    // The diet the person follows (null = none) and, for flexitarians, meat-free days a week to aim for.
+    diet: { follow: null, meatFreeDays: 5 },
     visibleNutrients: [...DEFAULT_VISIBLE],
     disclaimerAcceptedAt: null,
     setupCompletedAt: null,
@@ -39,6 +41,7 @@ export function withDefaults(saved) {
     water: { ...d.water, ...saved.water },
     rings: { ...d.rings, ...saved.rings },
     usda: { ...d.usda, ...saved.usda },
+    diet: { ...d.diet, ...saved.diet },
     profile: { ...d.profile, ...saved.profile },
     targets: { ...d.targets, ...saved.targets },
     goals: Object.fromEntries(Object.entries(d.goals).map(([k, v]) => [k, { ...v, ...saved.goals?.[k] }])),

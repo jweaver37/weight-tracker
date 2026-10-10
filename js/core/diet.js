@@ -151,6 +151,23 @@ export function detectDiets(recipe) {
   return { diets: result, hasMeat: classified.some((c) => MEAT_KINDS.some((k) => c.kinds.has(k))) };
 }
 
+// Does a logged entry contain meat, poultry or fish? A logged recipe is checked ingredient by
+// ingredient. Unsure items (e.g. plain "broth") get the benefit of the doubt.
+export function entryHasMeat(entry) {
+  const names = [entry.name, ...(entry.ingredients ?? []).map((i) => i.name)];
+  return names.some((n) => {
+    const { kinds } = classifyIngredient(n);
+    return MEAT_KINDS.some((k) => kinds.has(k));
+  });
+}
+
+// Diets a person can follow, for Settings. Flexitarian is a way of eating (mostly plant-based,
+// some meat) rather than a property of a recipe, so it appears here but not in recipe diets.
+export const FOLLOWED_DIETS = [
+  { key: 'flexitarian', label: 'Flexitarian (semi-vegetarian)', note: 'Mostly plant-based, with meat, poultry or fish now and then. Track meat-free days on the Goals tab.' },
+  ...DIETS.map((d) => ({ key: d.key, label: d.label, note: d.note })),
+];
+
 // Older recipes stored one choice in recipe.diet; it maps onto the per-diet answers.
 function legacyOverrides(diet) {
   if (diet === 'vegan') return { vegan: true, vegetarian: true, lactoVegetarian: true, ovoVegetarian: true, pescatarian: true, pollotarian: true };

@@ -6,6 +6,7 @@ import { targetKind } from './targets.js';
 import { currentValue } from './trends.js';
 import { entryNutrients, waterMl } from './nutrition.js';
 import { nutrientByKey } from './nutrients.js';
+import { entryHasMeat } from './diet.js';
 
 // Calories count as on target within this fraction of the day's budget.
 export const CALORIE_TOLERANCE = 0.1;
@@ -30,13 +31,14 @@ export function dataRange(anchor, today) {
 export function buildDaySummaries({ entries, workouts, water }) {
   const days = new Map();
   const day = (date) => {
-    if (!days.has(date)) days.set(date, { eaten: 0, nutrients: {}, burned: 0, workouts: 0, waterMl: 0, logged: false, entries: [] });
+    if (!days.has(date)) days.set(date, { eaten: 0, nutrients: {}, burned: 0, workouts: 0, waterMl: 0, logged: false, hasMeat: false, entries: [] });
     return days.get(date);
   };
   for (const e of entries) {
     const d = day(e.date);
     d.entries.push(e);
     d.logged = true;
+    if (entryHasMeat(e)) d.hasMeat = true;
     for (const [k, v] of Object.entries(entryNutrients(e))) d.nutrients[k] = (d.nutrients[k] ?? 0) + v;
   }
   for (const w of water) day(w.date).waterMl += w.ml;
@@ -53,7 +55,7 @@ export function buildDaySummaries({ entries, workouts, water }) {
   return days;
 }
 
-const EMPTY_DAY = { eaten: 0, nutrients: {}, burned: 0, workouts: 0, waterMl: 0, logged: false };
+const EMPTY_DAY = { eaten: 0, nutrients: {}, burned: 0, workouts: 0, waterMl: 0, logged: false, hasMeat: false };
 
 // ---- Daily checks, reused by the weekly and monthly rings ----
 
@@ -116,6 +118,12 @@ export const RINGS = [
       const target = s.targets.values[nutrient];
       return countDays(ctx, (d) => d.logged && targetHit(d.nutrients[nutrient] ?? 0, target, targetKind(nutrient)), days);
     },
+  },
+  {
+    // Only for people following a flexitarian diet (Settings → Your diet).
+    key: 'meatFreeDays', period: 'week', label: 'Meat-free days', color: 'green',
+    applies: (s) => s.diet.follow === 'flexitarian',
+    measure: (s, ctx) => countDays(ctx, (d) => d.logged && !d.hasMeat, s.diet.meatFreeDays),
   },
   {
     key: 'waterDays', period: 'week', label: 'Water days', color: 'cyan',

@@ -14,6 +14,7 @@ import { fmt, fmtAmount, fmtDate, fmtLength, fmtWeight } from '../format.js';
 import { entryAmountText, entryCalories } from '../foodEntry.js';
 import { lineChart } from '../chart.js';
 import { energyBreakdown, weightPoints } from '../targetsFlow.js';
+import { FOLLOWED_DIETS } from '../../core/diet.js';
 import { entryNutrients } from '../../core/nutrition.js';
 
 // Longest ranges allowed. Tested with ~13 food items a day: summary and tables run about
@@ -178,6 +179,7 @@ function profileBlock(s, breakdown) {
     ['Height', p.heightCm ? fmtHeight(p.heightCm, s.units.length) : '–'],
     ['Goal weight', fmtWeight(p.goalWeightKg, s.units.weight)],
     ['Activity', ACTIVITY_LEVELS.find((a) => a.key === p.activity)?.label.split(' (')[0] ?? '–'],
+    ['Diet', FOLLOWED_DIETS.find((x) => x.key === s.diet.follow)?.label ?? 'No specific diet'],
   ];
   const targets = Object.entries(s.targets.values)
     .filter(([k]) => nutrientByKey(k))
