@@ -20,5 +20,24 @@ export function addDays(str, days) {
   return toDateStr(date);
 }
 
+export const monthStart = (str) => `${str.slice(0, 8)}01`;
+
+export function monthEnd(str) {
+  const d = parseDateStr(str);
+  return toDateStr(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+}
+
+export const daysInMonth = (str) => Number(monthEnd(str).slice(8));
+
+// Every date from start to end, inclusive.
+export function datesBetween(start, end) {
+  const out = [];
+  for (let d = start; d <= end; d = addDays(d, 1)) out.push(d);
+  return out;
+}
+
+export const minDate = (a, b) => (a < b ? a : b);
+export const maxDate = (a, b) => (a > b ? a : b);
+
 // Whole days from a to b (rounded so daylight-saving shifts don't matter).
 export const daysBetween = (a, b) => Math.round((parseDateStr(b) - parseDateStr(a)) / 86400000);

@@ -156,6 +156,11 @@ function goalsSection(firstWeighIn) {
   const nutrientKeys = Object.keys(s.targets.values).filter((k) => nutrientByKey(k));
   const nutrient = selectInput(nutrientKeys.map((k) => ({ value: k, label: nutrientByKey(k).label })), s.goals.nutrition.nutrient);
   const nutritionDays = presetPicker([4, 5, 6, 7], s.goals.nutrition.days, { unit: 'of 7 days', max: 7 });
+  const ringDays = presetPicker([4, 5, 6, 7], s.rings.daysPerWeek, { unit: 'of 7 days', max: 7 });
+  ringDays.el.addEventListener('change', async () => {
+    const v = ringDays.read();
+    if (v) await saveSettings({ ...state.settings, rings: { ...state.settings.rings, daysPerWeek: Math.round(v) } });
+  });
 
   return h('section', { class: 'card' },
     h('h2', {}, 'Goals & milestones'),
@@ -179,7 +184,9 @@ function goalsSection(firstWeighIn) {
         nutrientKeys.length
           ? h('div', { class: 'input-row' }, field('Target', nutrient), field('On at least', nutritionDays.el))
           : h('p', { class: 'muted' }, 'Set nutrient targets above first.'),
-        () => { const d = nutritionDays.read(); return nutrientKeys.length && d && { nutrient: nutrient.value, days: Math.round(d) }; })));
+        () => { const d = nutritionDays.read(); return nutrientKeys.length && d && { nutrient: nutrient.value, days: Math.round(d) }; })),
+    field('Weekly rings: days on target', ringDays.el,
+      'On the Goals tab, the weekly “Calorie days” and “Water days” rings ask for this many days a week.'));
 }
 
 function activitiesSection(activities, rerender) {
