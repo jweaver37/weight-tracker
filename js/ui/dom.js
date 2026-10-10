@@ -1,9 +1,15 @@
 // Small DOM helpers: element builder, dialogs and toasts.
+import { titleCase } from './format.js';
 
 const PROPERTY_KEYS = new Set(['value', 'checked', 'selected', 'disabled', 'open']);
 
 // h('button', { class: 'btn', onClick: fn }, 'Save') — text children are always inserted as text.
+// Dropdown options and groups are shown in Title Case everywhere (values are unchanged).
 export function h(tag, props = {}, ...children) {
+  if (tag === 'option' || tag === 'optgroup') {
+    children = children.map((c) => (typeof c === 'string' ? titleCase(c) : c));
+    if (props?.label) props = { ...props, label: titleCase(props.label) };
+  }
   const el = document.createElement(tag);
   for (const [key, value] of Object.entries(props ?? {})) {
     if (value == null || value === false) continue;

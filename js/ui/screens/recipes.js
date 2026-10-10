@@ -96,7 +96,8 @@ export async function renderRecipes(view, id) {
       prefs.direction === 'asc' ? `↑ ${dirLabels[0]}` : `↓ ${dirLabels[1]}`);
 
     const dietSelect = h('select', { 'aria-label': 'Diet' },
-      h('option', { value: '', selected: !prefs.diet }, 'Any diet'),
+      // Not everyone follows a diet: this is the "no diet" choice too.
+      h('option', { value: '', selected: !prefs.diet }, 'Any / None'),
       DIETS.map((d) => h('option', { value: d.key, selected: d.key === prefs.diet }, d.label)));
     dietSelect.addEventListener('change', () => { prefs.diet = dietSelect.value || null; update(); });
 
