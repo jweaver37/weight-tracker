@@ -20,6 +20,7 @@ export function defaultSettings() {
     },
     goals: defaultGoals(),
     rings: { daysPerWeek: 5 }, // days a week the "on target" weekly rings ask for
+    usda: { apiKey: '' }, // blank = shared DEMO_KEY
     visibleNutrients: [...DEFAULT_VISIBLE],
     disclaimerAcceptedAt: null,
     setupCompletedAt: null,
@@ -37,6 +38,7 @@ export function withDefaults(saved) {
     units: { ...d.units, ...saved.units },
     water: { ...d.water, ...saved.water },
     rings: { ...d.rings, ...saved.rings },
+    usda: { ...d.usda, ...saved.usda },
     profile: { ...d.profile, ...saved.profile },
     targets: { ...d.targets, ...saved.targets },
     goals: Object.fromEntries(Object.entries(d.goals).map(([k, v]) => [k, { ...v, ...saved.goals?.[k] }])),

@@ -159,7 +159,8 @@ export function entryAmountText(entry) {
     const amount = entry.servings === 1 ? volume : `${n} × ${volume}`;
     return entry.countsAsWater ? amount : `${amount} · not counted as water`;
   }
-  return entry.servingSize ? `${n} × ${entry.servingSize}` : `${n} serving${entry.servings === 1 ? '' : 's'}`;
+  if (entry.servingSize) return entry.servings === 1 ? entry.servingSize : `${n} × ${entry.servingSize}`;
+  return `${n} serving${entry.servings === 1 ? '' : 's'}`;
 }
 
 export const entryCalories = (entry) => entryNutrients(entry).calories ?? 0;

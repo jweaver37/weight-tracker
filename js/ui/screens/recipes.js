@@ -8,6 +8,7 @@ import { editFood } from '../foodEntry.js';
 import { fmt, inputNumber } from '../format.js';
 import { macroLine, nutrientDetails } from '../nutritionSummary.js';
 import { ingredientList, logRecipe, recipeDisplayName } from '../recipeLog.js';
+import { openImport, shareRecipe } from '../recipeImport.js';
 
 export async function renderRecipes(view, id) {
   if (id) return renderEditor(view, id);
@@ -31,12 +32,14 @@ export async function renderRecipes(view, id) {
   mount(view,
     h('header', { class: 'page-head row' },
       h('h1', {}, 'Recipes'),
-      h('a', { class: 'btn btn-primary btn-small', href: '#/recipes/new' }, '+ New recipe')),
+      h('div', { class: 'button-row tight' },
+        h('button', { class: 'btn btn-small', type: 'button', onClick: openImport }, 'Import'),
+        h('a', { class: 'btn btn-primary btn-small', href: '#/recipes/new' }, '+ New recipe'))),
     recipes.length
       ? h('section', { class: 'card' }, recipes.length > 5 && search, list, h('small', { class: 'muted' }, 'Calories are per serving.'))
       : h('section', { class: 'card empty' },
         h('p', {}, 'No recipes yet.'),
-        h('p', { class: 'muted' }, 'Build a recipe from its ingredients once, then log it to any meal in two taps.')));
+        h('p', { class: 'muted' }, 'Build a recipe from its ingredients once, then log it to any meal in two taps. Or tap Import to paste one from a website or open one a friend shared.')));
 }
 
 async function renderEditor(view, id) {
@@ -61,6 +64,7 @@ async function renderEditor(view, id) {
       status.textContent = 'Saved';
       deleteBtn.hidden = false;
       logBtn.disabled = false;
+      shareBtn.disabled = false;
     });
     return saving;
   };
@@ -136,6 +140,11 @@ async function renderEditor(view, id) {
     await persist();
     if (await logRecipe(recipe, { date: todayStr(), meal: suggestedMeal() })) toast('Logged to today');
   });
+  const shareBtn = h('button', { class: 'btn', type: 'button', disabled: !recipe.id }, 'Share recipe');
+  shareBtn.addEventListener('click', async () => {
+    await persist();
+    await shareRecipe(recipe);
+  });
   const deleteBtn = h('button', { class: 'btn btn-danger', type: 'button', hidden: !recipe.id }, 'Delete recipe');
   deleteBtn.addEventListener('click', async () => {
     const ok = await confirmDialog(`Delete “${recipeDisplayName(recipe)}”? Days you already logged it keep their numbers.`, { okLabel: 'Delete', danger: true });
@@ -160,7 +169,7 @@ async function renderEditor(view, id) {
       h('div', { class: 'input-row' }, field('Prep time', minutesInput('prepMinutes')), field('Cook time', minutesInput('cookMinutes'))),
       field('Instructions', textArea('instructions', 'Steps, one per line')),
       field('Notes', textArea('notes', 'Tips, substitutions, where the recipe came from…'))),
-    h('div', { class: 'button-row' }, logBtn, deleteBtn));
+    h('div', { class: 'button-row' }, logBtn, shareBtn, deleteBtn));
 
   if (!recipe.id) setTimeout(() => name.focus(), 0);
 }

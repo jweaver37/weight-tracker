@@ -3,27 +3,15 @@ import { buildExport, importInto, parseExport } from '../data/backup.js';
 import { currentUserId } from '../data/repo.js';
 import { todayStr } from '../core/dates.js';
 import { state, saveSettings, loadSettings } from './state.js';
-import { confirmDialog, h, infoDialog, toast } from './dom.js';
+import { confirmDialog, infoDialog, toast } from './dom.js';
+import { downloadBlob, pickFile } from './files.js';
 
 export async function exportBackup() {
   const file = await buildExport(currentUserId());
   const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const link = h('a', { href: url, download: `weight-tracker-backup-${todayStr()}.json` });
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadBlob(blob, `weight-tracker-backup-${todayStr()}.json`);
   await saveSettings({ ...state.settings, lastBackupAt: new Date().toISOString() });
   toast('Backup downloaded');
-}
-
-function pickFile(accept) {
-  return new Promise((resolve) => {
-    const input = h('input', { type: 'file', accept });
-    input.addEventListener('change', () => resolve(input.files[0] ?? null));
-    input.click();
-  });
 }
 
 // Returns true when data was imported.

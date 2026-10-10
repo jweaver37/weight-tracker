@@ -27,6 +27,7 @@ export async function renderSettings(view, { onDataReplaced }) {
     nutrientsSection(),
     customFieldsSection(customFields, rerender),
     activitiesSection(activities, rerender),
+    foodDatabaseSection(),
     backupSection(rerender, onDataReplaced),
     disclaimerSection(),
   );
@@ -104,6 +105,23 @@ function nutrientsSection() {
     h('p', { class: 'muted' }, 'Every nutrient you enter is saved; this only controls what is shown.'),
     h('div', { class: 'check-grid' }, NUTRIENTS.filter((n) => n.group === 'label').map(box)),
     h('details', {}, h('summary', {}, 'Vitamins & minerals'), h('div', { class: 'check-grid' }, NUTRIENTS.filter((n) => n.group === 'micro').map(box))));
+}
+
+function foodDatabaseSection() {
+  const key = h('input', {
+    type: 'text', value: state.settings.usda?.apiKey ?? '', placeholder: 'Using the shared demo key',
+    autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', 'aria-label': 'USDA API key',
+  });
+  key.addEventListener('change', async () => {
+    await saveSettings({ ...state.settings, usda: { ...state.settings.usda, apiKey: key.value.trim() } });
+    toast(key.value.trim() ? 'API key saved' : 'Using the shared demo key');
+  });
+  return h('section', { class: 'card' },
+    h('h2', {}, 'Food database'),
+    h('p', { class: 'muted' },
+      'Importing a recipe looks up each ingredient in the USDA FoodData Central database. Without your own key the app uses a shared demo key that allows at most about 30 lookups an hour (one per ingredient, so only 2–3 recipes) and can run out sooner. A free personal key allows 1,000 an hour.'),
+    field('USDA API key', key),
+    h('p', {}, h('a', { href: 'https://fdc.nal.usda.gov/api-key-signup.html', target: '_blank', rel: 'noopener' }, 'Get a free key from USDA'), ' — it arrives by email in a minute or two.'));
 }
 
 function waterSection() {

@@ -137,7 +137,7 @@ function optionsCard(today, rerender, foodLogTooLong) {
     options.preset === 'custom' && h('div', { class: 'input-row' }, field('From', from), field('To', to)),
     h('div', {}, h('span', { class: 'field-label' }, 'Include'), h('div', {}, boxes),
       h('small', { class: 'muted' }, 'Your profile, targets and a summary are always included.')),
-    foodLogTooLong && h('p', { class: 'banner' },
+    foodLogTooLong && h('p', { class: 'notice' },
       `The full food log is limited to ${MAX_FOOD_LOG_DAYS} days to keep the report a manageable length. It is left out of this report; choose ${MAX_FOOD_LOG_DAYS} days or fewer to include it.`));
 }
 

@@ -1,0 +1,194 @@
+// Reads recipe text pasted from a website: ingredient lines like "1 ½ cups (200 g) flour, sifted",
+// plus the recipe's name, servings, times and instructions.
+
+// Measuring units. Mass and volume units have exact conversions; count units ("clove", "can")
+// are converted with the food's own portion weights from the nutrition database.
+export const UNITS = {
+  g: { kind: 'mass', factor: 1, aliases: ['g', 'gram', 'grams', 'gr'] },
+  kg: { kind: 'mass', factor: 1000, aliases: ['kg', 'kilogram', 'kilograms'] },
+  oz: { kind: 'mass', factor: 28.3495, aliases: ['oz', 'ounce', 'ounces'] },
+  lb: { kind: 'mass', factor: 453.592, aliases: ['lb', 'lbs', 'pound', 'pounds'] },
+  ml: { kind: 'volume', factor: 1, aliases: ['ml', 'milliliter', 'milliliters', 'millilitre', 'millilitres'] },
+  l: { kind: 'volume', factor: 1000, aliases: ['l', 'liter', 'liters', 'litre', 'litres'] },
+  tsp: { kind: 'volume', factor: 4.92892, aliases: ['tsp', 'tsps', 'teaspoon', 'teaspoons', 't'] },
+  tbsp: { kind: 'volume', factor: 14.7868, aliases: ['tbsp', 'tbsps', 'tbs', 'tbl', 'tablespoon', 'tablespoons', 'T'] },
+  cup: { kind: 'volume', factor: 236.588, aliases: ['cup', 'cups', 'c'] },
+  floz: { kind: 'volume', factor: 29.5735, aliases: ['fl oz', 'fl. oz', 'fluid ounce', 'fluid ounces'] },
+  pint: { kind: 'volume', factor: 473.176, aliases: ['pint', 'pints', 'pt'] },
+  quart: { kind: 'volume', factor: 946.353, aliases: ['quart', 'quarts', 'qt'] },
+  pinch: { kind: 'volume', factor: 0.31, aliases: ['pinch', 'pinches'] },
+  dash: { kind: 'volume', factor: 0.62, aliases: ['dash', 'dashes'] },
+  clove: { kind: 'count', aliases: ['clove', 'cloves'] },
+  can: { kind: 'count', aliases: ['can', 'cans'] },
+  slice: { kind: 'count', aliases: ['slice', 'slices'] },
+  piece: { kind: 'count', aliases: ['piece', 'pieces'] },
+  stick: { kind: 'count', aliases: ['stick', 'sticks'] },
+  package: { kind: 'count', aliases: ['package', 'packages', 'pkg', 'packet', 'packets'] },
+  bunch: { kind: 'count', aliases: ['bunch', 'bunches'] },
+  head: { kind: 'count', aliases: ['head', 'heads'] },
+  sprig: { kind: 'count', aliases: ['sprig', 'sprigs'] },
+  stalk: { kind: 'count', aliases: ['stalk', 'stalks'] },
+};
+
+// Longest aliases first so "fl oz" wins over "oz" and "cups" over "c".
+const ALIASES = Object.entries(UNITS)
+  .flatMap(([key, u]) => u.aliases.map((alias) => ({ key, alias })))
+  .sort((a, b) => b.alias.length - a.alias.length);
+
+const FRACTIONS = { '½': 1 / 2, '⅓': 1 / 3, '⅔': 2 / 3, '¼': 1 / 4, '¾': 3 / 4, '⅕': 1 / 5, '⅖': 2 / 5, '⅗': 3 / 5, '⅘': 4 / 5, '⅙': 1 / 6, '⅚': 5 / 6, '⅛': 1 / 8, '⅜': 3 / 8, '⅝': 5 / 8, '⅞': 7 / 8 };
+const FRACTION_CHARS = Object.keys(FRACTIONS).join('');
+
+// One number: "1", "1.5", "1/2", "1 1/2", "½", "1½", "1 ½".
+const NUMBER = `(?:\\d+(?:\\.\\d+)?\\s*[${FRACTION_CHARS}]|\\d+\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d*\\.\\d+|\\d+|[${FRACTION_CHARS}])`;
+// A quantity is one number or a range like "2-3" or "2 to 3" (the average is used).
+const QUANTITY_RE = new RegExp(`^(${NUMBER})(?:\\s*(?:-|–|to)\\s*(${NUMBER}))?\\s*`);
+
+function numberValue(text) {
+  const s = text.replace(/\s+/g, ' ').trim();
+  const fracChar = s.match(new RegExp(`^(\\d*)\\s*([${FRACTION_CHARS}])$`));
+  if (fracChar) return Number(fracChar[1] || 0) + FRACTIONS[fracChar[2]];
+  const mixed = s.match(/^(\d+) (\d+)\/(\d+)$/);
+  if (mixed) return Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3]);
+  const frac = s.match(/^(\d+)\/(\d+)$/);
+  if (frac) return Number(frac[2]) ? Number(frac[1]) / Number(frac[2]) : null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Bullets and the empty checkboxes many recipe sites put in front of ingredients.
+const BULLETS_RE = /^[\s•·*\-–▢☐◻□○●▪︎✓✔]+/u;
+
+// A weight in parentheses, e.g. "(15 oz)" or "(200 g)", gives the amount in grams directly.
+const PAREN_MASS_RE = /\(\s*(\d+(?:\.\d+)?)\s*-?\s*(g|grams?|kg|oz|ounces?|lbs?|pounds?)\.?\s*\)/i;
+
+function unitAt(text) {
+  for (const { key, alias } of ALIASES) {
+    // Single-letter aliases are case-sensitive (T = tablespoon, t = teaspoon) and need a space after.
+    const caseSensitive = alias.length === 1;
+    const head = text.slice(0, alias.length);
+    const matches = caseSensitive ? head === alias : head.toLowerCase() === alias.toLowerCase();
+    if (!matches) continue;
+    const next = text.charAt(alias.length);
+    if (next && !/[\s.,)]/.test(next)) continue;
+    return { key, rest: text.slice(alias.length).replace(/^\.?\s*/, '') };
+  }
+  return null;
+}
+
+const massToGrams = (value, unitText) => {
+  const u = unitText.toLowerCase();
+  if (u.startsWith('kg')) return value * 1000;
+  if (u.startsWith('g')) return value;
+  if (u.startsWith('o')) return value * UNITS.oz.factor;
+  return value * UNITS.lb.factor;
+};
+
+// Returns { original, quantity, unit, name, note, grams } or null for a blank line.
+// quantity is null for amounts like "salt, to taste"; grams is set only when the line states a weight.
+export function parseIngredientLine(line) {
+  const original = line.replace(BULLETS_RE, '').replace(/\s+/g, ' ').trim();
+  if (!original) return null;
+  let rest = original;
+  let quantity = null;
+  let unit = null;
+  let grams = null;
+
+  const q = rest.match(QUANTITY_RE);
+  if (q) {
+    const a = numberValue(q[1]);
+    const b = q[2] ? numberValue(q[2]) : null;
+    quantity = b != null ? (a + b) / 2 : a;
+    rest = rest.slice(q[0].length);
+  }
+
+  // "1 (15 oz) can beans": the weight in parentheses is per unit.
+  const paren = rest.match(PAREN_MASS_RE);
+  if (paren && rest.indexOf(paren[0]) <= 1) {
+    grams = massToGrams(Number(paren[1]), paren[2]) * (quantity ?? 1);
+    rest = rest.replace(paren[0], '').trim();
+  }
+
+  const u = unitAt(rest);
+  if (u) {
+    unit = u.key;
+    rest = u.rest;
+  }
+  rest = rest.replace(/^of\s+/i, '');
+
+  // A weight given later in the line, e.g. "1 cup flour (125 g)".
+  if (grams == null) {
+    const later = rest.match(PAREN_MASS_RE);
+    if (later) {
+      grams = massToGrams(Number(later[1]), later[2]);
+      rest = rest.replace(later[0], '').trim();
+    }
+  }
+  if (grams == null && unit && UNITS[unit].kind === 'mass' && quantity != null) grams = quantity * UNITS[unit].factor;
+
+  const [namePart, ...noteParts] = rest.split(',');
+  const name = namePart.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+  const note = noteParts.join(',').trim() || null;
+  return { original, quantity, unit, name: name || original, note, grams };
+}
+
+// Lines that start with an amount look like ingredients.
+const looksLikeIngredient = (line) => QUANTITY_RE.test(line.replace(BULLETS_RE, '').trim());
+
+const INGREDIENTS_HEAD = /^ingredients?\s*:?$/i;
+const STEPS_HEAD = /^(instructions?|directions?|method|preparation|steps?|how to make it)\s*:?$/i;
+const NOTES_HEAD = /^(notes?|tips?|nutrition( facts| information)?)\s*:?$/i;
+const SERVINGS_RE = /\b(?:serves|servings?|yields?|makes)\b\s*:?\s*(\d+)/i;
+const TIME_RE = (label) => new RegExp(`${label}\\s*time\\s*:?\\s*(?:(\\d+)\\s*(?:hours?|hrs?|h)\\s*)?(?:(\\d+)\\s*(?:minutes?|mins?|m))?`, 'i');
+
+function minutesFrom(text, label) {
+  const m = text.match(TIME_RE(label));
+  if (!m || (!m[1] && !m[2])) return null;
+  return Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0);
+}
+
+// Splits pasted recipe text into its parts. Works with or without "Ingredients" / "Instructions" headings.
+export function parseRecipeText(text) {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const all = lines.join('\n');
+  const servingsMatch = all.match(SERVINGS_RE);
+
+  const ingIdx = lines.findIndex((l) => INGREDIENTS_HEAD.test(l));
+  const stepIdx = lines.findIndex((l, i) => i > ingIdx && STEPS_HEAD.test(l));
+  const isMeta = (l) => SERVINGS_RE.test(l) || /\btime\b/i.test(l) || NOTES_HEAD.test(l);
+  // Sub-headings inside the list, like "For the sauce:".
+  const isSubheading = (l) => /:$/.test(l) && !looksLikeIngredient(l);
+
+  let ingredientLines;
+  let stepLines;
+  let headerLines;
+  if (ingIdx >= 0) {
+    const ingEnd = stepIdx >= 0 ? stepIdx : lines.length;
+    headerLines = lines.slice(0, ingIdx);
+    ingredientLines = lines.slice(ingIdx + 1, ingEnd).filter((l) => !isSubheading(l) && !NOTES_HEAD.test(l));
+    stepLines = stepIdx >= 0 ? lines.slice(stepIdx + 1) : [];
+  } else {
+    // No headings: the first run of amount-led lines is the ingredient list; what follows is the method.
+    const first = lines.findIndex(looksLikeIngredient);
+    let last = first;
+    while (last + 1 < lines.length && (looksLikeIngredient(lines[last + 1]) || (!/[.!?]$/.test(lines[last + 1]) && lines[last + 1].length < 60))) last++;
+    headerLines = first >= 0 ? lines.slice(0, first) : lines;
+    ingredientLines = first >= 0 ? lines.slice(first, last + 1).filter((l) => !isSubheading(l)) : [];
+    stepLines = first >= 0 ? lines.slice(last + 1) : [];
+  }
+
+  // Stop the method at a "Notes" or "Nutrition" section.
+  const notesAt = stepLines.findIndex((l) => NOTES_HEAD.test(l));
+  const notes = notesAt >= 0 ? stepLines.slice(notesAt + 1).join('\n') : '';
+  if (notesAt >= 0) stepLines = stepLines.slice(0, notesAt);
+
+  const name = headerLines.find((l) => !isMeta(l) && l.length <= 100) ?? '';
+  return {
+    name,
+    yieldServings: servingsMatch ? Number(servingsMatch[1]) : null,
+    prepMinutes: minutesFrom(all, 'prep(?:aration)?'),
+    cookMinutes: minutesFrom(all, 'cook(?:ing)?'),
+    ingredients: ingredientLines.map(parseIngredientLine).filter(Boolean),
+    instructions: stepLines.filter((l) => !STEPS_HEAD.test(l)).join('\n'),
+    notes,
+  };
+}
