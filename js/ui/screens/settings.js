@@ -2,7 +2,7 @@
 import { confirmDialog, h, toast, mount } from '../dom.js';
 import { state, saveSettings } from '../state.js';
 import * as repo from '../../data/repo.js';
-import { NUTRIENTS, nutrientByKey } from '../../core/nutrients.js';
+import { CUSTOM_FIELD_UNITS, NUTRIENTS, nutrientByKey } from '../../core/nutrients.js';
 import { canCalculate, CALCULATED_KEYS } from '../../core/targets.js';
 import { field, selectInput } from '../fields.js';
 import { profileForm, targetsForm } from '../profileForm.js';
@@ -97,9 +97,20 @@ function nutrientsSection() {
     h('details', {}, h('summary', {}, 'Vitamins & minerals'), h('div', { class: 'check-grid' }, NUTRIENTS.filter((n) => n.group === 'micro').map(box))));
 }
 
+const CUSTOM_UNIT = '__custom';
+
 function customFieldsSection(customFields, rerender) {
-  const name = h('input', { type: 'text', placeholder: 'e.g. Omega-3' });
-  const unit = selectInput(['g', 'mg', 'mcg', 'IU', 'kcal', 'ml', 'servings'].map((u) => ({ value: u, label: u })), 'g');
+  const name = h('input', { type: 'text', placeholder: 'e.g. Omega-3 or Vegetables' });
+  const unit = h('select', {},
+    CUSTOM_FIELD_UNITS.map((g) => h('optgroup', { label: g.label }, g.units.map((u) => h('option', { value: u }, u)))),
+    h('option', { value: CUSTOM_UNIT }, 'Custom…'));
+  const customUnit = h('input', { type: 'text', maxlength: 12, placeholder: 'e.g. scoops' });
+  const customUnitField = field('Your unit', customUnit, 'Up to 12 characters.');
+  customUnitField.hidden = true;
+  unit.addEventListener('change', () => {
+    customUnitField.hidden = unit.value !== CUSTOM_UNIT;
+    if (!customUnitField.hidden) customUnit.focus();
+  });
 
   const add = async (ev) => {
     ev.preventDefault();
@@ -109,7 +120,12 @@ function customFieldsSection(customFields, rerender) {
       toast(`“${n}” already exists`);
       return;
     }
-    await repo.save('customFields', { name: n, unit: unit.value, visible: true });
+    const u = unit.value === CUSTOM_UNIT ? customUnit.value.trim() : unit.value;
+    if (!u) {
+      customUnit.classList.add('invalid');
+      return;
+    }
+    await repo.save('customFields', { name: n, unit: u, visible: true });
     rerender();
   };
   const toggle = async (f, visible) => repo.save('customFields', { ...f, visible });
@@ -129,8 +145,11 @@ function customFieldsSection(customFields, rerender) {
         h('input', { type: 'checkbox', checked: f.visible !== false, onChange: (e) => toggle(f, e.target.checked) }),
         h('span', {}, `${f.name} (${f.unit})`)),
       h('button', { class: 'icon-btn small', type: 'button', 'aria-label': `Remove ${f.name}`, onClick: () => remove(f) }, '×')))),
-    h('form', { class: 'input-row align-end', onSubmit: add },
-      field('Name', name), field('Unit', unit), h('button', { class: 'btn', type: 'submit' }, 'Add')));
+    h('form', { class: 'form-grid', onSubmit: add },
+      h('div', { class: 'input-row' }, field('Name', name), field('Unit', unit)),
+      customUnitField,
+      h('button', { class: 'btn', type: 'submit' }, 'Add field')),
+    h('p', { class: 'muted' }, 'Amounts accept fractions, so a “cups” field covers ¼ cup (type 1/4), 1½ cups (1 1/2) and so on.'));
 }
 
 function backupSection(rerender, onDataReplaced) {

@@ -51,4 +51,12 @@ const BY_KEY = new Map(NUTRIENTS.map((n) => [n.key, n]));
 
 export const nutrientByKey = (key) => BY_KEY.get(key);
 
-export const DEFAULT_VISIBLE = NUTRIENTS.filter((n) => n.defaultVisible).map((n) => n.key);
+// Unit choices offered for custom fields; the user can also type their own.
+export const CUSTOM_FIELD_UNITS = [
+  { label: 'Nutrient amounts', units: ['g', 'mg', 'mcg', 'IU', 'kcal', '% DV'] },
+  { label: 'Volume', units: ['cups', 'tbsp', 'tsp', 'fl oz', 'ml', 'liters'] },
+  { label: 'Weight', units: ['oz', 'lb', 'kg'] },
+  { label: 'Count', units: ['servings', 'pieces', 'slices', 'glasses', 'cans', 'bottles'] },
+];
+
+export const DEFAULT_VISIBLE =NUTRIENTS.filter((n) => n.defaultVisible).map((n) => n.key);
