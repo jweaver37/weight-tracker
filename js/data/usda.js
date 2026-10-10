@@ -42,10 +42,13 @@ async function fetchWithRetry(url, options, apiKey) {
   }
 }
 
-// The key goes in a header rather than the URL, so it never appears in logs or browser history.
+// The key goes in the URL's api_key parameter, not an X-Api-Key header: a custom header makes the
+// browser send a CORS preflight first, and api.data.gov fails those intermittently (4 of 10 in a
+// test, versus 0 of 10 with the key in the URL). The URL is encrypted in transit (HTTPS) and
+// background requests don't enter browser history. Never log the URL.
 async function call(path, params, apiKey) {
-  const query = new URLSearchParams(params);
-  const response = await fetchWithRetry(`${BASE}/${path}?${query}`, { headers: { 'X-Api-Key': apiKey || DEMO_KEY } }, apiKey);
+  const query = new URLSearchParams({ ...params, api_key: apiKey || DEMO_KEY });
+  const response = await fetchWithRetry(`${BASE}/${path}?${query}`, {}, apiKey);
   if (response.status === 429) {
     recordLimitHit(apiKey);
     throw new UsdaError(apiKey

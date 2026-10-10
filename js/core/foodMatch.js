@@ -46,7 +46,12 @@ export function searchTerms(ingredient) {
 }
 
 // Forms of a food that are rarely what a recipe means unless it says so.
-const UNLIKELY = ['soup', 'condensed', 'babyfood', 'baby', 'dehydrated', 'dry mix', 'mix', 'powder', 'dry', 'instant', 'nonfat', 'frozen', 'imitation', 'infant', 'fast food', 'restaurant'];
+const UNLIKELY = [
+  'soup', 'condensed', 'babyfood', 'baby', 'dehydrated', 'dried', 'dry mix', 'mix', 'powder', 'dry', 'instant', 'nonfat',
+  'frozen', 'imitation', 'infant', 'fast food', 'restaurant',
+  // Special versions: only when the recipe asks for them.
+  'low-sodium', 'low sodium', 'reduced sodium', 'reduced fat', 'reduced-fat', 'low fat', 'lowfat', 'fat free', 'fat-free', 'sugar free', 'sugar-free',
+];
 // Parts of a food ("Egg, white") — wrong unless asked for.
 const PARTS = ['white', 'yolk'];
 // The everyday form a recipe means when it just says "milk" or "eggs".
@@ -103,8 +108,42 @@ function portionMl(p) {
   return null;
 }
 
-// Grams for the ingredient's amount. method: 'stated' (weight on the line), 'portion' (USDA measure),
-// 'estimate' (assumed density or a typical piece), or 'none' (no amount, e.g. "to taste").
+// Typical weights (g) of foods recipes count rather than measure, from USDA reference portions.
+// Used when the matched USDA entry has no matching portion (e.g. "2 large eggs" matched to an entry
+// without a "large" measure).
+const TYPICAL_PIECES = [
+  { food: 'egg', label: 'egg', sizes: { small: 38, medium: 44, large: 50, 'extra large': 56, jumbo: 63 }, usual: 'large' },
+  { food: 'garlic', unit: 'clove', label: 'clove', grams: 3 },
+  { food: 'onion', label: 'onion', sizes: { small: 70, medium: 110, large: 150 }, usual: 'medium' },
+  { food: 'banana', label: 'banana', sizes: { small: 101, medium: 118, large: 136 }, usual: 'medium' },
+  { food: 'apple', label: 'apple', sizes: { small: 149, medium: 182, large: 223 }, usual: 'medium' },
+  { food: 'potato', label: 'potato', sizes: { small: 170, medium: 213, large: 369 }, usual: 'medium' },
+  { food: 'carrot', label: 'carrot', sizes: { small: 50, medium: 61, large: 72 }, usual: 'medium' },
+  { food: 'tomato', label: 'tomato', sizes: { small: 91, medium: 123, large: 182 }, usual: 'medium' },
+  { food: 'lemon', label: 'lemon', grams: 58 },
+  { food: 'lime', label: 'lime', grams: 67 },
+  { food: 'butter', unit: 'stick', label: 'stick', grams: 113 },
+];
+const SIZE_RE = /\b(extra large|jumbo|large|medium|small)\b/;
+
+function typicalPiece(ingredient) {
+  const name = ingredient.name.toLowerCase();
+  const nameWords = words(name).map(singular);
+  const entry = TYPICAL_PIECES.find((t) => nameWords.includes(t.food) && (t.unit ? ingredient.unit === t.unit : !ingredient.unit));
+  if (!entry) return null;
+  if (entry.grams) return { grams: entry.grams, label: entry.label };
+  const size = name.match(SIZE_RE)?.[1] ?? entry.usual;
+  return { grams: entry.sizes[size], label: `${size} ${entry.label}` };
+}
+
+// How a unit reads in "2 cups × 200 g per cup".
+const UNIT_LABELS = { cup: 'cup', tbsp: 'tbsp', tsp: 'tsp', floz: 'fl oz', ml: 'ml', l: 'liter', pint: 'pint', quart: 'quart', pinch: 'pinch', dash: 'dash' };
+
+// Grams for the ingredient's amount, as { grams, method, each } where each = { grams, label } is one
+// unit of what the recipe counted or measured ("large egg", "cup"), so the screen can show
+// "2 large eggs × 50 g each". method: 'stated' (weight given in the recipe), 'portion' (USDA measure),
+// 'typical' (standard size, e.g. a large egg), 'estimate' (rough guess — check it), 'none' (no amount,
+// e.g. "to taste") or 'unknown' (enter the grams).
 export function gramsFor(ingredient, portions = []) {
   const { quantity, unit, name } = ingredient;
   if (ingredient.grams != null) return { grams: ingredient.grams, method: 'stated' };
@@ -115,17 +154,31 @@ export function gramsFor(ingredient, portions = []) {
   if (kind === 'mass') return { grams: quantity * UNITS[unit].factor, method: 'stated' };
 
   if (kind === 'volume') {
-    const ml = quantity * UNITS[unit].factor;
+    const unitMl = UNITS[unit].factor;
     const measured = usable.map((p) => ({ p, ml: portionMl(p) })).find((x) => x.ml);
-    if (measured) return { grams: (ml / measured.ml) * measured.p.gramWeight, method: 'portion' };
-    return { grams: ml, method: 'estimate' }; // assume about 1 g per ml, like water
+    const label = UNIT_LABELS[unit] ?? unit;
+    if (measured) {
+      const per = (unitMl / measured.ml) * measured.p.gramWeight;
+      return { grams: quantity * per, method: 'portion', each: { grams: per, label } };
+    }
+    // No volume measure: assume about 1 g per ml, like water.
+    return { grams: quantity * unitMl, method: 'estimate', each: { grams: unitMl, label } };
   }
 
-  // Counts: "3 cloves", "1 large onion", "2 eggs". Prefer a portion naming the unit or size.
-  const words = [unit, ...(name.toLowerCase().match(/\b(large|medium|small|extra large|jumbo)\b/g) ?? [])].filter(Boolean);
-  const named = usable.find((p) => words.some((w) => portionText(p).includes(w)) && !portionMl(p));
-  if (named) return { grams: (quantity / (named.amount || 1)) * named.gramWeight, method: 'portion' };
+  // Counts: "3 cloves", "1 large onion", "2 eggs". Prefer a USDA portion naming the unit or size.
+  const sizeWords = name.toLowerCase().match(new RegExp(SIZE_RE.source, 'g')) ?? [];
+  const wanted = [unit, ...sizeWords].filter(Boolean);
+  const named = wanted.length ? usable.find((p) => wanted.some((w) => portionText(p).includes(w)) && !portionMl(p)) : null;
+  if (named) {
+    const per = named.gramWeight / (named.amount || 1);
+    return { grams: quantity * per, method: 'portion', each: { grams: per, label: wanted.join(' ') } };
+  }
+  const typical = typicalPiece(ingredient);
+  if (typical) return { grams: quantity * typical.grams, method: 'typical', each: typical };
   const anyPiece = usable.find((p) => !portionMl(p));
-  if (anyPiece) return { grams: (quantity / (anyPiece.amount || 1)) * anyPiece.gramWeight, method: 'estimate' };
+  if (anyPiece) {
+    const per = anyPiece.gramWeight / (anyPiece.amount || 1);
+    return { grams: quantity * per, method: 'estimate', each: { grams: per, label: portionText(anyPiece).trim() || 'piece' } };
+  }
   return { grams: null, method: 'unknown' };
 }

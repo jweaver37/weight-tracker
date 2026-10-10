@@ -3,7 +3,7 @@ import { h, infoDialog, mount, showDialog, toast } from './dom.js';
 import { field, numberInput, readNumber } from './fields.js';
 import * as repo from '../data/repo.js';
 import { state } from './state.js';
-import { parseRecipeText } from '../core/ingredients.js';
+import { parseRecipeText, UNITS } from '../core/ingredients.js';
 import { gramsFor, per100g, rankCandidates, scaleTo, searchTerms } from '../core/foodMatch.js';
 import { buildRecipeFile, readRecipeFile, recipeFileName } from '../core/recipeShare.js';
 import { getFoods, searchFoods, UsdaError } from '../data/usda.js';
@@ -129,13 +129,24 @@ const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 // "medium onion" → "Onion": the size is already in the amount line.
 const ingredientName = (name) => capitalize(name.replace(/\b(extra large|large|medium|small)\b/gi, '').replace(/\s+/g, ' ').trim() || name);
 
-const METHOD_NOTES = {
-  stated: 'Weight from the recipe',
-  portion: 'Converted with a USDA measure',
-  estimate: 'Estimated — check the grams',
-  none: 'No amount given — not counted',
-  unknown: 'Enter the grams',
-};
+// How the grams were worked out, in the recipe's own units: "2 large eggs × 50 g each".
+function amountNote(row) {
+  const { ing, method, each } = row;
+  const g = (v) => `${fmt(v, v < 10 ? 1 : 0)} g`;
+  const times = each && ing.quantity != null ? `${fmt(ing.quantity, 2)} × ${g(each.grams)} ${ing.unit && UNITS[ing.unit]?.kind === 'volume' ? `per ${each.label}` : 'each'}` : '';
+  switch (method) {
+    case 'stated': return 'Weight from the recipe';
+    case 'manual': return 'Grams entered by you';
+    case 'portion': return `${times} (USDA measure)`;
+    case 'typical': return `${times} (typical ${each.label})`;
+    case 'estimate': return ing.unit && UNITS[ing.unit]?.kind === 'volume'
+      ? `${times} — estimated as the weight of water, so check the grams`
+      : `${times} (estimated) — check the grams`;
+    case 'none': return 'No amount given — not counted';
+    default: return 'This food has no standard size — enter the grams (weigh one, or check the package)';
+  }
+}
+const isRoughNote = (method) => method === 'estimate' || method === 'unknown';
 
 // Step 2: review the recipe and each ingredient's USDA match, then create it.
 function reviewStep(body, parsed, close) {
@@ -160,6 +171,7 @@ function reviewStep(body, parsed, close) {
     const g = gramsFor(row.ing, foods.get(row.fdcId)?.foodPortions ?? []);
     row.grams = g.grams;
     row.method = g.method;
+    row.each = g.each ?? null;
   };
 
   const rowEl = (row) => {
@@ -188,7 +200,7 @@ function reviewStep(body, parsed, close) {
       const grams = numberInput(row.grams == null ? '' : inputNumber(row.grams, 0), { 'aria-label': `Grams of ${row.ing.name}`, inputmode: 'decimal' });
       grams.addEventListener('change', () => {
         const r = readNumber(grams);
-        if (r.value != null) { row.grams = r.value; row.method = 'stated'; render(); updateTotals(); }
+        if (r.value != null) { row.grams = r.value; row.method = 'manual'; render(); updateTotals(); }
       });
       mount(li,
         h('div', { class: 'import-line' }, row.ing.original),
@@ -196,7 +208,7 @@ function reviewStep(body, parsed, close) {
           select,
           row.fdcId && h('div', { class: 'input-unit grams' }, grams, h('span', {}, 'g')),
           row.fdcId && h('strong', { class: 'import-kcal' }, kcal == null ? '–' : `${fmt(kcal)} kcal`)),
-        row.fdcId && row.method && h('small', { class: row.method === 'estimate' || row.method === 'unknown' ? 'warn-text' : 'muted' }, METHOD_NOTES[row.method]));
+        row.fdcId && row.method && h('small', { class: isRoughNote(row.method) ? 'warn-text' : 'muted' }, amountNote(row)));
     };
     row.render = render;
     render();
