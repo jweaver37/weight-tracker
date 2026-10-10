@@ -404,6 +404,43 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 6px 
   .report h2, .report h3 { break-after: avoid; }
 }
 
+/* Recipe list: sort & filter */
+.recipe-controls { display: grid; gap: 10px; }
+.recipe-controls input[type="search"] { margin: 0; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: 999px; padding: 6px 12px; min-height: 34px;
+  font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+}
+.chip-toggle.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.chip-x { border: none; background: none; color: inherit; font-size: 1.05rem; line-height: 1; padding: 0 0 0 2px; cursor: pointer; }
+.result-count { margin: 0 0 4px; font-size: 0.85rem; }
+.diet-badge {
+  display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 6px;
+  background: var(--surface-2); color: var(--muted); font-size: 0.75rem; font-weight: 700;
+}
+.diet-badge.sure { background: var(--accent-soft); color: var(--accent); }
+.diet-badge.unsure { background: var(--warn-soft); color: var(--warn); }
+.diet-list { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 4px; }
+.diet-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+  padding: 8px 10px; font: inherit; color: inherit; cursor: pointer;
+}
+.diet-icon { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; flex: none; background: var(--surface-2); color: var(--muted); }
+.diet-row.fits .diet-icon { background: var(--accent-soft); color: var(--accent); }
+.diet-row.check .diet-icon { background: var(--warn-soft); color: var(--warn); }
+.diet-main { display: grid; flex: 1; min-width: 0; line-height: 1.25; }
+.diet-main strong { font-size: 0.92rem; }
+.diet-source { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.diet-source.set { color: var(--accent); }
+.entry-kcal { display: grid; justify-items: end; text-align: right; }
+.sort-label { font-weight: 500; font-size: 0.72rem; }
+.diet-explain { display: grid; gap: 2px; }
+.diet-explain p { margin: 0 0 2px; }
+
 /* Recipe import */
 button.choice { width: 100%; text-align: left; font: inherit; color: inherit; background: var(--surface); }
 button.choice:hover { border-color: var(--accent); }

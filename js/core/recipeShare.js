@@ -1,4 +1,8 @@
 // Recipe files for sharing with friends: one recipe, with no personal data or device ids.
+import { MEALS } from './nutrition.js';
+import { DIET_KEYS } from './diet.js';
+
+const MEAL_KEYS = MEALS.map((m) => m.key);
 const APP_ID = 'WeightTracker';
 const KIND = 'recipe';
 export const RECIPE_FILE_VERSION = 1;
@@ -21,6 +25,8 @@ export function buildRecipeFile(recipe, customFields) {
       cookMinutes: recipe.cookMinutes ?? null,
       instructions: recipe.instructions ?? '',
       notes: recipe.notes ?? '',
+      meals: recipe.meals ?? [],
+      dietOverrides: recipe.dietOverrides ?? {},
       ingredients: (recipe.ingredients ?? []).map((i) => ({
         ...Object.fromEntries(INGREDIENT_FIELDS.filter((k) => i[k] !== undefined).map((k) => [k, i[k]])),
         custom: i.custom ?? {},
@@ -62,6 +68,9 @@ export function readRecipeFile(text, localFields) {
     cookMinutes: Number.isFinite(r.cookMinutes) ? r.cookMinutes : null,
     instructions: String(r.instructions ?? ''),
     notes: String(r.notes ?? ''),
+    meals: (Array.isArray(r.meals) ? r.meals : []).filter((m) => MEAL_KEYS.includes(m)),
+    dietOverrides: Object.fromEntries(Object.entries(r.dietOverrides && typeof r.dietOverrides === 'object' ? r.dietOverrides : {})
+      .filter(([k, v]) => DIET_KEYS.includes(k) && typeof v === 'boolean')),
     ingredients: (Array.isArray(r.ingredients) ? r.ingredients : []).map((i) => ({
       kind: 'food',
       name: String(i.name ?? 'Ingredient'),

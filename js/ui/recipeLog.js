@@ -12,13 +12,17 @@ export const recipeDisplayName = (recipe) => recipe.name || 'Untitled recipe';
 
 // Picks a recipe, then a portion. Resolves 'saved' or undefined.
 export async function addRecipeToDay({ date, meal }) {
-  const recipe = await pickRecipe();
+  const recipe = await pickRecipe(meal);
   if (!recipe) return undefined;
   return logRecipe(recipe, { date, meal });
 }
 
-async function pickRecipe() {
-  const recipes = (await repo.listAll('recipes')).sort((a, b) => recipeDisplayName(a).localeCompare(recipeDisplayName(b)));
+// Recipes tagged for this meal come first, then the rest, each alphabetically.
+async function pickRecipe(meal) {
+  const forMeal = (r) => ((r.meals ?? []).includes(meal) ? 0 : 1);
+  const recipes = (await repo.listAll('recipes'))
+    .sort((a, b) => forMeal(a) - forMeal(b) || recipeDisplayName(a).localeCompare(recipeDisplayName(b)));
+  const mealLabel = MEALS.find((m) => m.key === meal)?.label;
   return showDialog((close) => {
     const search = h('input', { type: 'search', placeholder: 'Search recipes', 'aria-label': 'Search recipes' });
     const list = h('ul', { class: 'pick-list' });
@@ -29,7 +33,9 @@ async function pickRecipe() {
         h('button', { class: 'entry', type: 'button', onClick: () => close(r) },
           h('span', { class: 'entry-main' },
             h('span', { class: 'entry-name' }, recipeDisplayName(r)),
-            h('small', { class: 'muted' }, `Makes ${fmt(r.yieldServings, 2)} · ${fmt(perServing(r.ingredients, r.yieldServings).nutrients.calories ?? 0)} kcal per serving`)),
+            h('small', { class: 'muted' },
+              forMeal(r) === 0 && mealLabel && h('span', { class: 'diet-badge' }, mealLabel),
+              `Makes ${fmt(r.yieldServings, 2)} · ${fmt(perServing(r.ingredients, r.yieldServings).nutrients.calories ?? 0)} kcal per serving`)),
           h('span', { class: 'chevron', 'aria-hidden': 'true' }, '›')))));
       if (!shown.length) list.append(h('li', { class: 'muted empty' }, recipes.length ? 'No matches.' : 'No recipes yet.'));
     };
