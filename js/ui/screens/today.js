@@ -17,16 +17,18 @@ import { ingredientShare } from '../../core/recipes.js';
 import { totalBurned } from '../../core/workouts.js';
 import { openWorkoutEntry } from '../workoutEntry.js';
 import { checkMilestones } from '../milestones.js';
+import { energyBreakdown } from '../targetsFlow.js';
 
 let currentDate = todayStr();
 
 export async function renderToday(view) {
   const s = state.settings;
-  const [entries, customFields, workouts, waterRecords] = await Promise.all([
+  const [entries, customFields, workouts, waterRecords, breakdown] = await Promise.all([
     repo.listForDate('logEntries', currentDate),
     repo.listAll('customFields'),
     repo.listForDate('workouts', currentDate),
     repo.listForDate('water', currentDate),
+    energyBreakdown(),
   ]);
   const byCreated = (a, b) => (a.createdAt < b.createdAt ? -1 : 1);
   entries.sort(byCreated);
@@ -68,7 +70,7 @@ export async function renderToday(view) {
   mount(view,
     dateNav(rerender),
     backupBanner(s, rerender),
-    calorieCard(totals.nutrients.calories ?? 0, s.targets.values.calories, totalBurned(workouts)),
+    calorieCard(totals.nutrients.calories ?? 0, s.targets.values.calories, totalBurned(workouts), breakdown),
     nutrientCard(totals, s, customFields, water),
     MEALS.map((m) => mealSection(m, meals[m.key], actions, m.key === 'drinks' && waterTracker(water, s.units.volume, actions))),
     workoutSection(workouts, actions),
@@ -102,10 +104,13 @@ function backupBanner(s, rerender) {
 }
 
 // Logged exercise adds to the day's budget: target + exercise − eaten = remaining.
-function calorieCard(eaten, target, burned) {
+function calorieCard(eaten, target, burned, breakdown) {
+  const bmrLine = breakdown && h('p', { class: 'bmr-line muted' },
+    `Based on your BMR of ${fmt(breakdown.bmr)} kcal · `,
+    h('a', { href: '#/settings/bmr' }, 'How it’s calculated'));
   if (!target) {
     return h('section', { class: 'card calorie-card' },
-      h('div', { class: 'big-number' }, fmt(eaten)), h('div', { class: 'muted' }, 'kcal eaten · set a target in Settings'));
+      h('div', { class: 'big-number' }, fmt(eaten)), h('div', { class: 'muted' }, 'kcal eaten · set a target in Settings'), bmrLine);
   }
   const budget = target + burned;
   const remaining = budget - eaten;
@@ -116,7 +121,8 @@ function calorieCard(eaten, target, burned) {
       h('span', { class: 'op' }, '−'),
       stat(fmt(eaten), 'Eaten'), h('span', { class: 'op' }, '='),
       stat(fmt(Math.abs(remaining)), remaining >= 0 ? 'Remaining' : 'Over', remaining < 0 ? 'over' : 'ok')),
-    progressBar(eaten, budget, 'goal'));
+    progressBar(eaten, budget, 'goal'),
+    bmrLine);
 }
 
 function workoutSection(workouts, actions) {

@@ -6,34 +6,40 @@ import { CUSTOM_FIELD_UNITS, NUTRIENTS, nutrientByKey } from '../../core/nutrien
 import { canCalculate, CALCULATED_KEYS } from '../../core/targets.js';
 import { field, numberInput, presetPicker, readNumber, selectInput } from '../fields.js';
 import { profileForm, targetsForm } from '../profileForm.js';
-import { recalculateTargets, showTargetChange, weightPoints } from '../targetsFlow.js';
+import { energyBreakdown, recalculateTargets, showTargetChange, weightPoints } from '../targetsFlow.js';
 import { exportBackup, importBackup } from '../backupActions.js';
 import { DISCLAIMER_TEXT, DISCLAIMER_TITLE } from '../disclaimer.js';
-import { fmtAmount, fmtDate, fmtWeight } from '../format.js';
+import { fmt, fmtAmount, fmtDate, fmtWeight } from '../format.js';
 import { roundTo, volumeFromDisplay, volumeLabel, volumeToDisplay, weightFromDisplay, weightToDisplay } from '../../core/units.js';
 import { checkMilestones } from '../milestones.js';
+import { looksLikeApiKey } from '../../data/usda.js';
 
-export async function renderSettings(view, { onDataReplaced }) {
+// `focus` scrolls to a section, e.g. #/settings/bmr from the Today screen.
+export async function renderSettings(view, { onDataReplaced, focus }) {
   const byName = (a, b) => a.name.localeCompare(b.name);
-  const [customFields, activities, points] = await Promise.all([repo.listAll('customFields'), repo.listAll('activities'), weightPoints()]);
+  const [customFields, activities, points, breakdown] = await Promise.all([
+    repo.listAll('customFields'), repo.listAll('activities'), weightPoints(), energyBreakdown(),
+  ]);
   customFields.sort(byName);
   activities.sort(byName);
   const rerender = () => renderSettings(view, { onDataReplaced });
   mount(view,
     h('header', { class: 'page-head' }, h('h1', {}, 'Settings')),
-    profileSection(rerender),
+    profileSection(rerender, breakdown),
     waterSection(),
     goalsSection(points[0]),
     nutrientsSection(),
     customFieldsSection(customFields, rerender),
     activitiesSection(activities, rerender),
-    foodDatabaseSection(),
+    foodDatabaseSection(rerender),
     backupSection(rerender, onDataReplaced),
     disclaimerSection(),
   );
+  // After the router's scroll-to-top.
+  if (focus) setTimeout(() => document.getElementById(focus)?.scrollIntoView({ block: 'start' }), 0);
 }
 
-function profileSection(rerender) {
+function profileSection(rerender, breakdown) {
   const s = state.settings;
   const profile = profileForm(s);
   const targets = targetsForm(s, { weightUnit: profile.weightUnit, advanced: true });
@@ -68,11 +74,45 @@ function profileSection(rerender) {
   return h('form', { class: 'card', onSubmit: save },
     h('h2', {}, 'Profile'),
     profile.el,
-    h('h2', {}, 'Daily targets'),
+    h('h2', { id: 'bmr' }, 'Daily targets'),
+    calorieBreakdown(s, breakdown),
     currentTargets(s),
     targets.el,
     errorBox,
     h('button', { class: 'btn btn-primary btn-block', type: 'submit' }, 'Save profile & targets'));
+}
+
+// How the calorie target is reached: BMR × activity = maintenance, minus the weight-loss deficit.
+function calorieBreakdown(s, b) {
+  if (!b) {
+    return h('p', { class: 'notice' }, 'Add your sex, birth date and height below (and a weigh-in) to see your BMR — the calories your body burns at rest — and how your calorie target is worked out.');
+  }
+  const kcal = (v) => `${fmt(v)} kcal`;
+  const step = (label, value, note, cls = '') => h('li', { class: cls },
+    h('div', { class: 'breakdown-row' }, h('span', {}, label), h('strong', {}, value)),
+    note && h('small', { class: 'muted' }, note));
+  const manual = s.targets.mode === 'manual';
+  const target = s.targets.values.calories;
+  const unit = s.units.weight;
+  const weight = fmtWeight(b.weightKg, unit);
+  const pace = fmtWeight(s.targets.lossRateKgPerWeek, unit, unit === 'kg' ? 2 : 1);
+  return h('section', { class: 'breakdown', 'aria-label': 'How your calorie target is calculated' },
+    h('h3', {}, 'How your calorie target is calculated'),
+    h('ol', {},
+      step('BMR (basal metabolic rate)', kcal(b.bmr),
+        `Calories your body burns at complete rest. Mifflin-St Jeor formula, using your weight (${weight}), height, age and sex.`),
+      step(`× Activity level (${b.activityFactor})`, `= ${kcal(b.maintenance)}`,
+        `Maintenance: about what you burn on a normal day without logged workouts (${b.activityLabel.split(' (')[0].toLowerCase()}). Eating this much keeps your weight steady.`),
+      manual
+        ? step('Your target', target ? kcal(target) : '–', 'You entered your own targets, so the steps above are for reference only.', 'total')
+        : [
+          step(`− Weight-loss pace (${pace} a week)`, `− ${kcal(b.deficit)}`, 'A pound of body weight is about 3,500 kcal (7,700 per kg), spread over the 7 days.'),
+          step('= Daily calorie target', kcal(b.values.calories),
+            b.floorApplied
+              ? `Raised to your minimum of ${kcal(b.floor)} — calories are never set lower than that.`
+              : 'Calories from workouts you log are added on top, on the Today screen.',
+            'total'),
+        ]));
 }
 
 function currentTargets(s) {
@@ -107,21 +147,48 @@ function nutrientsSection() {
     h('details', {}, h('summary', {}, 'Vitamins & minerals'), h('div', { class: 'check-grid' }, NUTRIENTS.filter((n) => n.group === 'micro').map(box))));
 }
 
-function foodDatabaseSection() {
+function foodDatabaseSection(rerender) {
+  const saved = state.settings.usda?.apiKey ?? '';
+  // Shown as dots so it can't be read off the screen or a screenshot; "Show" reveals it briefly.
   const key = h('input', {
-    type: 'text', value: state.settings.usda?.apiKey ?? '', placeholder: 'Using the shared demo key',
+    type: 'password', value: saved, placeholder: saved ? '' : 'Paste your key here',
     autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', 'aria-label': 'USDA API key',
   });
-  key.addEventListener('change', async () => {
-    await saveSettings({ ...state.settings, usda: { ...state.settings.usda, apiKey: key.value.trim() } });
-    toast(key.value.trim() ? 'API key saved' : 'Using the shared demo key');
+  const show = h('button', { class: 'btn btn-small', type: 'button' }, 'Show');
+  show.addEventListener('click', () => {
+    const hidden = key.type === 'password';
+    key.type = hidden ? 'text' : 'password';
+    show.textContent = hidden ? 'Hide' : 'Show';
   });
+  const errorLine = h('p', { class: 'errors' });
+  const save = async (value) => {
+    await saveSettings({ ...state.settings, usda: { ...state.settings.usda, apiKey: value } });
+    toast(value ? 'API key saved' : 'Key removed — using the shared demo key');
+    rerender();
+  };
+  key.addEventListener('change', () => {
+    const value = key.value.trim();
+    if (value && !looksLikeApiKey(value)) {
+      key.classList.add('invalid');
+      errorLine.textContent = 'That doesn’t look like a USDA key. It should be 40 letters and numbers, from the email USDA sent you.';
+      return;
+    }
+    errorLine.textContent = '';
+    save(value);
+  });
+
   return h('section', { class: 'card' },
     h('h2', {}, 'Food database'),
     h('p', { class: 'muted' },
       'Importing a recipe looks up each ingredient in the USDA FoodData Central database. Without your own key the app uses a shared demo key that allows at most about 30 lookups an hour (one per ingredient, so only 2–3 recipes) and can run out sooner. A free personal key allows 1,000 an hour.'),
-    field('USDA API key', key),
-    h('p', {}, h('a', { href: 'https://fdc.nal.usda.gov/api-key-signup.html', target: '_blank', rel: 'noopener' }, 'Get a free key from USDA'), ' — it arrives by email in a minute or two.'));
+    field('USDA API key', h('div', { class: 'input-row align-center' }, key, show)),
+    errorLine,
+    saved
+      ? h('p', {}, h('span', { class: 'muted' }, `Key saved (ends in …${saved.slice(-4)}). `),
+        h('button', { class: 'link-btn', type: 'button', onClick: () => save('') }, 'Remove key'))
+      : h('p', {}, h('a', { href: 'https://fdc.nal.usda.gov/api-key-signup.html', target: '_blank', rel: 'noopener' }, 'Get a free key from USDA'), ' — it arrives by email in a minute or two.'),
+    h('p', { class: 'muted' },
+      'Your key is stored only on this device. It is never included in backups or shared recipes, and is sent only to USDA.'));
 }
 
 function waterSection() {

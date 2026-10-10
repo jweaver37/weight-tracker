@@ -29,7 +29,7 @@ const TABS = [
   { route: 'recipes', label: 'Recipes', render: renderRecipes },
   { route: 'goals', label: 'Goals', render: renderGoals },
   { route: 'reports', label: 'Reports', render: renderReports },
-  { route: 'settings', label: 'Settings', render: (view) => renderSettings(view, { onDataReplaced: route }) },
+  { route: 'settings', label: 'Settings', render: (view, focus) => renderSettings(view, { onDataReplaced: route, focus }) },
 ];
 
 const view = document.getElementById('view');

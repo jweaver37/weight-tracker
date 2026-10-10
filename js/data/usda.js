@@ -7,11 +7,15 @@ const DATA_TYPES = 'Foundation,SR Legacy';
 
 export class UsdaError extends Error {}
 
+// api.data.gov keys are 40 letters and digits; this catches pasting the wrong thing.
+export const looksLikeApiKey = (key) => /^[A-Za-z0-9]{32,64}$/.test(key);
+
+// The key goes in a header rather than the URL, so it never appears in logs or browser history.
 async function call(path, params, apiKey) {
-  const query = new URLSearchParams({ ...params, api_key: apiKey || DEMO_KEY });
+  const query = new URLSearchParams(params);
   let response;
   try {
-    response = await fetch(`${BASE}/${path}?${query}`);
+    response = await fetch(`${BASE}/${path}?${query}`, { headers: { 'X-Api-Key': apiKey || DEMO_KEY } });
   } catch {
     throw new UsdaError('Couldn’t reach the USDA food database. Check your internet connection.');
   }

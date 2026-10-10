@@ -13,7 +13,7 @@ import { field, selectInput } from '../fields.js';
 import { fmt, fmtAmount, fmtDate, fmtLength, fmtWeight } from '../format.js';
 import { entryAmountText, entryCalories } from '../foodEntry.js';
 import { lineChart } from '../chart.js';
-import { weightPoints } from '../targetsFlow.js';
+import { energyBreakdown, weightPoints } from '../targetsFlow.js';
 import { entryNutrients } from '../../core/nutrition.js';
 
 // Longest ranges allowed. Tested with ~13 food items a day: summary and tables run about
@@ -76,14 +76,15 @@ export async function renderReports(view) {
 
   if (problems.length) return;
   const sections = { ...options.sections, food: options.sections.food && !foodLogTooLong };
-  const [entries, workouts, water, points] = await Promise.all([
+  const [entries, workouts, water, points, breakdown] = await Promise.all([
     repo.listRange('logEntries', start, end),
     repo.listRange('workouts', start, end),
     repo.listRange('water', start, end),
     weightPoints(),
+    energyBreakdown(),
   ]);
   const report = buildReport({ start, end, entries, workouts, water, points, settings: state.settings });
-  mount(preview, reportDocument(report, points, sections));
+  mount(preview, reportDocument(report, points, sections, breakdown));
   estimate.textContent = `${dayCount} days · about ${estimatePages(preview.firstChild)} printed pages.`;
   fitPreview(preview);
 }
@@ -149,7 +150,7 @@ const estimatePages = (el) => Math.max(1, Math.ceil((el.scrollHeight - PREVIEW_P
 
 // ---- The report itself ----
 
-function reportDocument(report, points, sections) {
+function reportDocument(report, points, sections, breakdown) {
   const s = state.settings;
   const range = `${fmtDate(report.start, { month: 'short', day: 'numeric', year: 'numeric' })} – ${fmtDate(report.end, { month: 'short', day: 'numeric', year: 'numeric' })}`;
   return h('article', { class: 'report' },
@@ -160,7 +161,7 @@ function reportDocument(report, points, sections) {
       h('p', { class: 'report-meta' }, `Prepared ${fmtDate(todayStr(), { month: 'short', day: 'numeric', year: 'numeric' })}`)),
     h('p', { class: 'report-note' },
       'Self-reported data recorded in the Weight Tracker app. Calories burned and calculated targets are estimates.'),
-    profileBlock(s),
+    profileBlock(s, breakdown),
     summaryBlock(report, s),
     sections.weight && weightBlock(report, points, s),
     sections.daily && (report.summary.dayCount > DAILY_TABLE_MAX_DAYS ? weeklyBlock(report, s) : dailyBlock(report, s)),
@@ -168,7 +169,7 @@ function reportDocument(report, points, sections) {
     sections.food && foodBlock(report));
 }
 
-function profileBlock(s) {
+function profileBlock(s, breakdown) {
   const p = s.profile;
   const today = todayStr();
   const facts = [
@@ -182,9 +183,15 @@ function profileBlock(s) {
     .filter(([k]) => nutrientByKey(k))
     .map(([k, v]) => [nutrientByKey(k).label, fmtAmount(v, nutrientByKey(k).unit)]);
   if (s.water.targetMl) targets.push(['Water', `${fmt(volumeToDisplay(s.water.targetMl, s.units.volume))} ${volumeLabel(s.units.volume)}`]);
+  // Resting and maintenance calories behind the calorie target (Mifflin-St Jeor).
+  if (breakdown) {
+    facts.push(['BMR (at rest)', `${fmt(breakdown.bmr)} kcal/day`]);
+    facts.push(['Maintenance', `${fmt(breakdown.maintenance)} kcal/day (BMR × ${breakdown.activityFactor})`]);
+  }
   return h('section', { class: 'report-section report-columns' },
-    h('div', {}, h('h2', {}, 'Profile'), factList(facts)),
-    h('div', {}, h('h2', {}, `Daily targets (${s.targets.mode === 'manual' ? 'entered by user' : 'calculated'})`), factList(targets)));
+    h('div', {}, h('h2', {}, 'Profile'), factList(facts),
+      breakdown && h('p', { class: 'report-note' }, `BMR from the Mifflin-St Jeor equation at ${fmtWeight(breakdown.weightKg, s.units.weight)}.`)),
+    h('div', {}, h('h2', {}, `Daily targets (${s.targets.mode === 'manual' ? 'entered by user' : 'calculated from BMR'})`), factList(targets)));
 }
 
 const factList = (rows) => h('dl', { class: 'fact-list' }, rows.map(([k, v]) => [h('dt', {}, k), h('dd', {}, v)]));

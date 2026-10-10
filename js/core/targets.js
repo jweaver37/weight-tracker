@@ -44,7 +44,8 @@ export function calculateTargets({ sex, age, heightCm, weightKg, goalWeightKg, a
   const level = ACTIVITY_LEVELS.find((a) => a.key === activity) ?? ACTIVITY_LEVELS[0];
   const bmr = mifflinStJeor({ sex, weightKg, heightCm, age });
   const maintenance = bmr * level.factor;
-  const unclamped = maintenance - (lossRateKgPerWeek * KCAL_PER_KG) / 7;
+  const deficit = (lossRateKgPerWeek * KCAL_PER_KG) / 7;
+  const unclamped = maintenance - deficit;
   const floor = minCaloriesFor(sex, minCalories);
   const calories = Math.round(Math.max(floor, unclamped));
 
@@ -65,8 +66,14 @@ export function calculateTargets({ sex, age, heightCm, weightKg, goalWeightKg, a
       addedSugars: Math.round((calories * 0.1) / 4),
       saturatedFat: Math.round((calories * 0.1) / 9),
     },
+    // The steps, for showing how the calorie target was reached:
+    // BMR × activity factor = maintenance; maintenance − deficit = target (but not below the floor).
     bmr: Math.round(bmr),
+    activityFactor: level.factor,
+    activityLabel: level.label,
     maintenance: Math.round(maintenance),
+    deficit: Math.round(deficit),
+    floor,
     floorApplied: unclamped < floor,
   };
 }

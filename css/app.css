@@ -190,7 +190,7 @@ small { font-size: 0.82rem; }
 .field { display: grid; gap: 4px; min-width: 0; }
 .field-label { font-size: 0.85rem; font-weight: 600; color: var(--muted); }
 .field-hint { color: var(--muted); }
-input[type="text"], input[type="date"], input:not([type]), select {
+input[type="text"], input[type="password"], input[type="date"], input[type="month"], input:not([type]), select {
   width: 100%;
   min-height: 44px;
   font: inherit;
@@ -206,6 +206,9 @@ input.invalid { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger)
 .input-row > * { flex: 1; }
 .input-row.align-end { align-items: flex-end; }
 .input-row.align-end > .btn { flex: 0 0 auto; }
+.input-row.align-center { align-items: center; }
+.input-row.align-center > .btn { flex: 0 0 auto; }
+.link-btn { padding: 0; min-height: 0; font: inherit; color: var(--accent); background: none; border: none; text-decoration: underline; cursor: pointer; }
 .input-unit { display: flex; align-items: center; gap: 6px; }
 .input-unit span { color: var(--muted); font-size: 0.9rem; min-width: 2.2em; }
 .choice {
@@ -446,7 +449,16 @@ input[type="search"] { min-height: 44px; margin-bottom: 8px; }
 textarea { resize: vertical; }
 
 /* Settings */
-.target-summary { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+.bmr-line { margin: 10px 0 0; font-size: 0.85rem; text-align: center; }
+.breakdown { background: var(--surface-2); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+.breakdown h3 { margin: 0 0 8px; }
+.breakdown ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.breakdown li { display: grid; gap: 2px; }
+.breakdown li.total { border-top: 1px solid var(--border); padding-top: 8px; }
+.breakdown li.total strong { color: var(--accent); font-size: 1.05rem; }
+.breakdown-row { display: flex; justify-content: space-between; gap: 12px; font-size: 0.92rem; }
+.breakdown-row strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.target-summary {background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
 .target-summary ul { list-style: none; margin: 0 0 4px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; }
 .target-summary li { display: flex; justify-content: space-between; font-size: 0.9rem; padding: 2px 0; }
 .disclaimer p { font-size: 0.92rem; }

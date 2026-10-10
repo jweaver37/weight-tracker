@@ -23,6 +23,19 @@ export async function recalculateTargets(weightKg) {
   return { oldValues, newValues: result.values, floorApplied: result.floorApplied };
 }
 
+// The BMR → maintenance → target steps behind the calorie target, or null when the profile lacks
+// sex, birth date or height (or there is no weight yet). Calculated targets use the weight they were
+// last calculated from, so the steps add up to the target shown; manual targets use current weight.
+export async function energyBreakdown() {
+  const s = state.settings;
+  const today = todayStr();
+  const weightKg = s.targets.mode === 'calculated' && s.targets.basisWeightKg
+    ? s.targets.basisWeightKg
+    : currentValue(await weightPoints(), today);
+  const result = calculateFromSettings(s, weightKg, today);
+  return result && { ...result, weightKg };
+}
+
 // After a weigh-in: recalculate once the 7-day average has dropped by the threshold, and show the change.
 export async function checkAutoRecalc() {
   const avg = averageOver(await weightPoints(), todayStr(), 7);
