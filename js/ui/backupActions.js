@@ -3,7 +3,7 @@ import { buildExport, importInto, parseExport } from '../data/backup.js';
 import { currentUserId } from '../data/repo.js';
 import { todayStr } from '../core/dates.js';
 import { state, saveSettings, loadSettings } from './state.js';
-import { confirmDialog, h, toast } from './dom.js';
+import { confirmDialog, h, infoDialog, toast } from './dom.js';
 
 export async function exportBackup() {
   const file = await buildExport(currentUserId());
@@ -34,7 +34,7 @@ export async function importBackup() {
   try {
     file = parseExport(await fileHandle.text());
   } catch (err) {
-    await confirmDialog(err.message, { title: 'Can’t import', okLabel: 'OK' });
+    await infoDialog(err.message, { title: 'Can’t import' });
     return false;
   }
   const total = Object.values(file.data).reduce((n, records) => n + (Array.isArray(records) ? records.length : 0), 0);

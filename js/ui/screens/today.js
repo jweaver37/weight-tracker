@@ -12,13 +12,21 @@ import { entryAmountText, entryCalories, openFoodEntry } from '../foodEntry.js';
 import { exportBackup } from '../backupActions.js';
 import { addRecipeToDay, openRecipeEntry } from '../recipeLog.js';
 import { ingredientShare } from '../../core/recipes.js';
+import { totalBurned } from '../../core/workouts.js';
+import { openWorkoutEntry } from '../workoutEntry.js';
 
 let currentDate = todayStr();
 
 export async function renderToday(view) {
   const s = state.settings;
-  const [entries, customFields] = await Promise.all([repo.listForDate('logEntries', currentDate), repo.listAll('customFields')]);
-  entries.sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  const [entries, customFields, workouts] = await Promise.all([
+    repo.listForDate('logEntries', currentDate),
+    repo.listAll('customFields'),
+    repo.listForDate('workouts', currentDate),
+  ]);
+  const byCreated = (a, b) => (a.createdAt < b.createdAt ? -1 : 1);
+  entries.sort(byCreated);
+  workouts.sort(byCreated);
   const totals = sumEntries(entries);
   const meals = groupByMeal(entries);
   const rerender = () => renderToday(view);
@@ -32,6 +40,7 @@ export async function renderToday(view) {
         : await openFoodEntry({ entry, date: currentDate, customFields });
       if (result) rerender();
     },
+    workout: async (workout) => { if (await openWorkoutEntry({ entry: workout, date: currentDate })) rerender(); },
     toggle: (entry) => {
       if (expanded.has(entry.id)) expanded.delete(entry.id);
       else expanded.add(entry.id);
@@ -42,9 +51,10 @@ export async function renderToday(view) {
   mount(view,
     dateNav(rerender),
     backupBanner(s, rerender),
-    calorieCard(totals.nutrients.calories ?? 0, s.targets.values.calories),
+    calorieCard(totals.nutrients.calories ?? 0, s.targets.values.calories, totalBurned(workouts)),
     nutrientCard(totals, s, customFields),
     MEALS.map((m) => mealSection(m, meals[m.key], actions)),
+    workoutSection(workouts, actions),
   );
 }
 
@@ -73,18 +83,37 @@ function backupBanner(s, rerender) {
     h('button', { class: 'btn btn-small', type: 'button', onClick: async () => { await exportBackup(); rerender(); } }, 'Back up now'));
 }
 
-function calorieCard(eaten, target) {
+// Logged exercise adds to the day's budget: target + exercise − eaten = remaining.
+function calorieCard(eaten, target, burned) {
   if (!target) {
     return h('section', { class: 'card calorie-card' },
       h('div', { class: 'big-number' }, fmt(eaten)), h('div', { class: 'muted' }, 'kcal eaten · set a target in Settings'));
   }
-  const remaining = target - eaten;
+  const budget = target + burned;
+  const remaining = budget - eaten;
   return h('section', { class: 'card calorie-card' },
     h('div', { class: 'calorie-equation' },
-      stat(fmt(target), 'Target'), h('span', { class: 'op' }, '−'),
+      stat(fmt(target), 'Target'),
+      burned > 0 && [h('span', { class: 'op' }, '+'), stat(fmt(burned), 'Exercise')],
+      h('span', { class: 'op' }, '−'),
       stat(fmt(eaten), 'Eaten'), h('span', { class: 'op' }, '='),
       stat(fmt(Math.abs(remaining)), remaining >= 0 ? 'Remaining' : 'Over', remaining < 0 ? 'over' : 'ok')),
-    progressBar(eaten, target, 'goal'));
+    progressBar(eaten, budget, 'goal'));
+}
+
+function workoutSection(workouts, actions) {
+  const burned = totalBurned(workouts);
+  return h('section', { class: 'card meal' },
+    h('div', { class: 'meal-head' },
+      h('h2', {}, 'Workouts'),
+      h('span', { class: 'muted' }, workouts.length ? `${fmt(burned)} kcal burned` : '')),
+    workouts.length > 0 && h('ul', { class: 'entry-list' }, workouts.map((w) => h('li', {},
+      h('button', { class: 'entry', type: 'button', onClick: () => actions.workout(w) },
+        h('span', { class: 'entry-main' },
+          h('span', { class: 'entry-name' }, w.name),
+          h('small', { class: 'muted' }, [`${fmt(w.minutes)} min`, w.notes].filter(Boolean).join(' · '))),
+        h('span', { class: 'entry-kcal burn' }, `−${fmt(w.calories)}`))))),
+    h('button', { class: 'btn btn-ghost btn-block', type: 'button', onClick: () => actions.workout() }, '+ Workout'));
 }
 
 const stat = (value, label, tone) =>

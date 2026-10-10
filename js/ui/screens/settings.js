@@ -4,7 +4,7 @@ import { state, saveSettings } from '../state.js';
 import * as repo from '../../data/repo.js';
 import { CUSTOM_FIELD_UNITS, NUTRIENTS, nutrientByKey } from '../../core/nutrients.js';
 import { canCalculate, CALCULATED_KEYS } from '../../core/targets.js';
-import { field, selectInput } from '../fields.js';
+import { field, numberInput, readNumber, selectInput } from '../fields.js';
 import { profileForm, targetsForm } from '../profileForm.js';
 import { recalculateTargets, showTargetChange } from '../targetsFlow.js';
 import { exportBackup, importBackup } from '../backupActions.js';
@@ -12,13 +12,17 @@ import { DISCLAIMER_TEXT, DISCLAIMER_TITLE } from '../disclaimer.js';
 import { fmtAmount, fmtWeight } from '../format.js';
 
 export async function renderSettings(view, { onDataReplaced }) {
-  const customFields = (await repo.listAll('customFields')).sort((a, b) => a.name.localeCompare(b.name));
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  const [customFields, activities] = await Promise.all([repo.listAll('customFields'), repo.listAll('activities')]);
+  customFields.sort(byName);
+  activities.sort(byName);
   const rerender = () => renderSettings(view, { onDataReplaced });
-  mount(view, 
+  mount(view,
     h('header', { class: 'page-head' }, h('h1', {}, 'Settings')),
     profileSection(rerender),
     nutrientsSection(),
     customFieldsSection(customFields, rerender),
+    activitiesSection(activities, rerender),
     backupSection(rerender, onDataReplaced),
     disclaimerSection(),
   );
@@ -95,6 +99,36 @@ function nutrientsSection() {
     h('p', { class: 'muted' }, 'Every nutrient you enter is saved; this only controls what is shown.'),
     h('div', { class: 'check-grid' }, NUTRIENTS.filter((n) => n.group === 'label').map(box)),
     h('details', {}, h('summary', {}, 'Vitamins & minerals'), h('div', { class: 'check-grid' }, NUTRIENTS.filter((n) => n.group === 'micro').map(box))));
+}
+
+function activitiesSection(activities, rerender) {
+  const name = h('input', { type: 'text', placeholder: 'e.g. Kayaking' });
+  const met = numberInput('', { placeholder: 'e.g. 5', 'aria-label': 'MET value' });
+  const add = async (ev) => {
+    ev.preventDefault();
+    const n = name.value.trim();
+    const { value } = readNumber(met);
+    if (!n) return;
+    if (!value || value <= 1 || value > 25) { met.classList.add('invalid'); return; }
+    await repo.save('activities', { name: n, met: value });
+    rerender();
+  };
+  const remove = async (a) => {
+    const ok = await confirmDialog(`Remove “${a.name}”? Workouts already logged keep their calories.`, { okLabel: 'Remove', danger: true });
+    if (ok) {
+      await repo.remove('activities', a.id);
+      rerender();
+    }
+  };
+  return h('section', { class: 'card' },
+    h('h2', {}, 'My activities'),
+    h('p', { class: 'muted' },
+      'Activities you add appear at the top of the workout list. MET is how hard an activity is compared with sitting still (1); walking is about 3.5 and running about 10.'),
+    activities.length > 0 && h('ul', { class: 'history-list' }, activities.map((a) => h('li', {},
+      h('span', {}, a.name), h('span', { class: 'muted' }, `MET ${a.met}`),
+      h('button', { class: 'icon-btn small', type: 'button', 'aria-label': `Remove ${a.name}`, onClick: () => remove(a) }, '×')))),
+    h('form', { class: 'input-row align-end', onSubmit: add },
+      field('Activity', name), field('MET', met), h('button', { class: 'btn', type: 'submit' }, 'Add')));
 }
 
 const CUSTOM_UNIT = '__custom';

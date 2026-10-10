@@ -71,6 +71,16 @@ export function confirmDialog(message, { title = 'Are you sure?', okLabel = 'OK'
   ).then(Boolean);
 }
 
+// A message with a single OK button.
+export function infoDialog(message, { title }) {
+  return showDialog((close) =>
+    h('div', { class: 'dialog-body' },
+      h('h2', {}, title),
+      h('p', {}, message),
+      h('div', { class: 'dialog-actions' },
+        h('button', { class: 'btn btn-primary', type: 'button', onClick: () => close() }, 'OK'))));
+}
+
 export function toast(message) {
   const el = h('div', { class: 'toast', role: 'status' }, message);
   document.body.append(el);
