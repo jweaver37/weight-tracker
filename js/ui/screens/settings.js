@@ -4,22 +4,25 @@ import { state, saveSettings } from '../state.js';
 import * as repo from '../../data/repo.js';
 import { CUSTOM_FIELD_UNITS, NUTRIENTS, nutrientByKey } from '../../core/nutrients.js';
 import { canCalculate, CALCULATED_KEYS } from '../../core/targets.js';
-import { field, numberInput, readNumber, selectInput } from '../fields.js';
+import { field, numberInput, presetPicker, readNumber, selectInput } from '../fields.js';
 import { profileForm, targetsForm } from '../profileForm.js';
-import { recalculateTargets, showTargetChange } from '../targetsFlow.js';
+import { recalculateTargets, showTargetChange, weightPoints } from '../targetsFlow.js';
 import { exportBackup, importBackup } from '../backupActions.js';
 import { DISCLAIMER_TEXT, DISCLAIMER_TITLE } from '../disclaimer.js';
-import { fmtAmount, fmtWeight } from '../format.js';
+import { fmtAmount, fmtDate, fmtWeight } from '../format.js';
+import { roundTo, weightFromDisplay, weightToDisplay } from '../../core/units.js';
+import { checkMilestones } from '../milestones.js';
 
 export async function renderSettings(view, { onDataReplaced }) {
   const byName = (a, b) => a.name.localeCompare(b.name);
-  const [customFields, activities] = await Promise.all([repo.listAll('customFields'), repo.listAll('activities')]);
+  const [customFields, activities, points] = await Promise.all([repo.listAll('customFields'), repo.listAll('activities'), weightPoints()]);
   customFields.sort(byName);
   activities.sort(byName);
   const rerender = () => renderSettings(view, { onDataReplaced });
   mount(view,
     h('header', { class: 'page-head' }, h('h1', {}, 'Settings')),
     profileSection(rerender),
+    goalsSection(points[0]),
     nutrientsSection(),
     customFieldsSection(customFields, rerender),
     activitiesSection(activities, rerender),
@@ -99,6 +102,64 @@ function nutrientsSection() {
     h('p', { class: 'muted' }, 'Every nutrient you enter is saved; this only controls what is shown.'),
     h('div', { class: 'check-grid' }, NUTRIENTS.filter((n) => n.group === 'label').map(box)),
     h('details', {}, h('summary', {}, 'Vitamins & minerals'), h('div', { class: 'check-grid' }, NUTRIENTS.filter((n) => n.group === 'micro').map(box))));
+}
+
+function goalsSection(firstWeighIn) {
+  const s = state.settings;
+  const unit = s.units.weight;
+
+  const commit = async (key, patch) => {
+    await saveSettings({ ...state.settings, goals: { ...state.settings.goals, [key]: { ...state.settings.goals[key], ...patch } } });
+    checkMilestones();
+  };
+
+  // A checkbox that turns the goal on, with its options shown underneath while it is on.
+  const goal = (key, title, description, options, readOptions) => {
+    const box = h('input', { type: 'checkbox', checked: s.goals[key].enabled });
+    const optionsEl = h('div', { class: 'goal-options', hidden: !s.goals[key].enabled }, options);
+    const save = () => {
+      const values = readOptions();
+      if (values) commit(key, { ...values, enabled: box.checked });
+    };
+    box.addEventListener('change', () => {
+      optionsEl.hidden = !box.checked;
+      save();
+    });
+    optionsEl.addEventListener('change', save);
+    return h('div', { class: 'goal' },
+      h('label', { class: 'choice' }, box, h('span', {}, h('strong', {}, title), h('small', {}, description))),
+      optionsEl);
+  };
+
+  const stepPresets = unit === 'kg' ? [1, 2, 5] : [2, 5, 10];
+  const step = presetPicker(stepPresets, roundTo(weightToDisplay(s.goals.weightLoss.stepKg, unit), 2), { unit, max: unit === 'kg' ? 50 : 100 });
+  const streakDays = presetPicker([7, 14, 30], s.goals.loggingStreak.days, { unit: 'days', min: 2, max: 365 });
+  const perWeek = presetPicker([2, 3, 4, 5], s.goals.workoutsPerWeek.perWeek, { unit: 'a week', max: 14 });
+  const weeks = presetPicker([2, 4, 8], s.goals.workoutsPerWeek.weeks, { unit: 'weeks', max: 52 });
+  const nutrientKeys = Object.keys(s.targets.values).filter((k) => nutrientByKey(k));
+  const nutrient = selectInput(nutrientKeys.map((k) => ({ value: k, label: nutrientByKey(k).label })), s.goals.nutrition.nutrient);
+  const nutritionDays = presetPicker([4, 5, 6, 7], s.goals.nutrition.days, { unit: 'of 7 days', max: 7 });
+
+  return h('section', { class: 'card' },
+    h('h2', {}, 'Goals & milestones'),
+    h('p', { class: 'muted' }, 'Turn on a goal to track it. When you reach a milestone you’ll get a message showing what changed.'),
+    h('div', { class: 'form-grid' },
+      goal('weightLoss', 'Weight loss', firstWeighIn
+        ? `A milestone each time your 7-day average drops by this much from your first weigh-in (${fmtWeight(firstWeighIn.value, unit)} on ${fmtDate(firstWeighIn.date)}).`
+        : 'A milestone each time your 7-day average drops by this much from your first weigh-in.',
+      field('Every', step.el),
+      () => { const v = step.read(); return v && { stepKg: weightFromDisplay(v, unit) }; }),
+      goal('loggingStreak', 'Logging streak', 'Log food every day for this many days in a row.',
+        field('Streak length', streakDays.el),
+        () => { const v = streakDays.read(); return v && { days: Math.round(v) }; }),
+      goal('workoutsPerWeek', 'Workouts per week', 'Hit a number of workouts a week for several weeks running. Weeks start on Sunday.',
+        h('div', { class: 'input-row' }, field('Workouts', perWeek.el), field('For', weeks.el)),
+        () => { const p = perWeek.read(); const w = weeks.read(); return p && w && { perWeek: Math.round(p), weeks: Math.round(w) }; }),
+      goal('nutrition', 'Nutrition consistency', 'Hit a nutrient target on most days of the week. Counts the last 7 finished days.',
+        nutrientKeys.length
+          ? h('div', { class: 'input-row' }, field('Target', nutrient), field('On at least', nutritionDays.el))
+          : h('p', { class: 'muted' }, 'Set nutrient targets above first.'),
+        () => { const d = nutritionDays.read(); return nutrientKeys.length && d && { nutrient: nutrient.value, days: Math.round(d) }; })));
 }
 
 function activitiesSection(activities, rerender) {

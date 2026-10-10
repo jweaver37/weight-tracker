@@ -9,6 +9,7 @@ import { field, weightInput } from '../fields.js';
 import { lineChart } from '../chart.js';
 import { fmtDate, fmtWeight } from '../format.js';
 import { checkAutoRecalc } from '../targetsFlow.js';
+import { checkMilestones } from '../milestones.js';
 
 const RANGES = [
   { key: '1m', label: '1M', days: 30 },
@@ -33,6 +34,7 @@ export async function renderWeight(view) {
     chartCard(points, s, today, rerender),
     historyCard(records, unit, rerender),
   );
+  checkMilestones();
 }
 
 function entryCard(records, unit, rerender) {

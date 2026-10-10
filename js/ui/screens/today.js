@@ -14,6 +14,7 @@ import { addRecipeToDay, openRecipeEntry } from '../recipeLog.js';
 import { ingredientShare } from '../../core/recipes.js';
 import { totalBurned } from '../../core/workouts.js';
 import { openWorkoutEntry } from '../workoutEntry.js';
+import { checkMilestones } from '../milestones.js';
 
 let currentDate = todayStr();
 
@@ -56,6 +57,7 @@ export async function renderToday(view) {
     MEALS.map((m) => mealSection(m, meals[m.key], actions)),
     workoutSection(workouts, actions),
   );
+  checkMilestones();
 }
 
 // Logged recipes whose ingredient list is shown.

@@ -9,6 +9,7 @@ import { renderToday } from './screens/today.js';
 import { renderWeight } from './screens/weight.js';
 import { renderSettings } from './screens/settings.js';
 import { renderRecipes } from './screens/recipes.js';
+import { checkMilestones } from './milestones.js';
 
 // Icons are static markup defined here, never user data.
 const ICONS = {
@@ -53,6 +54,7 @@ async function route() {
     for (const a of tabbar.querySelectorAll('.tab')) a.classList.toggle('active', a.dataset.route === tab.route);
     await tab.render(view, param);
     window.scrollTo(0, 0);
+    checkMilestones();
   } catch (err) {
     console.error(err);
     view.replaceChildren(h('section', { class: 'card errors' }, h('h2', {}, 'Something went wrong'), h('p', {}, String(err.message ?? err))));

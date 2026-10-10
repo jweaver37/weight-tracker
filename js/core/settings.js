@@ -1,6 +1,7 @@
 // Per-user settings shape and defaults.
 import { DEFAULT_VISIBLE } from './nutrients.js';
 import { lbToKg } from './units.js';
+import { defaultGoals } from './goals.js';
 
 export function defaultSettings() {
   return {
@@ -16,6 +17,7 @@ export function defaultSettings() {
       basisWeightKg: null, // weight the current calculated targets are based on
       calculatedAt: null,
     },
+    goals: defaultGoals(),
     visibleNutrients: [...DEFAULT_VISIBLE],
     disclaimerAcceptedAt: null,
     setupCompletedAt: null,
@@ -33,6 +35,7 @@ export function withDefaults(saved) {
     units: { ...d.units, ...saved.units },
     profile: { ...d.profile, ...saved.profile },
     targets: { ...d.targets, ...saved.targets },
+    goals: Object.fromEntries(Object.entries(d.goals).map(([k, v]) => [k, { ...v, ...saved.goals?.[k] }])),
   };
 }
 
