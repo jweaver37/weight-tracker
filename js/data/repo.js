@@ -36,6 +36,11 @@ export async function save(store, record) {
   return stamped;
 }
 
+export async function get(store, id) {
+  const record = await db.get(store, id);
+  return record && record.userId === activeUserId ? record : null;
+}
+
 export const remove = (store, id) => db.remove(store, id);
 export const listAll = (store) => db.getAllByUser(store, activeUserId);
 export const listForDate = (store, date) => db.getByUserDate(store, activeUserId, date);

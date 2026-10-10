@@ -8,17 +8,20 @@ import { renderOnboarding } from './screens/onboarding.js';
 import { renderToday } from './screens/today.js';
 import { renderWeight } from './screens/weight.js';
 import { renderSettings } from './screens/settings.js';
+import { renderRecipes } from './screens/recipes.js';
 
 // Icons are static markup defined here, never user data.
 const ICONS = {
   today: '<svg viewBox="0 0 24 24"><path d="M4 11h16M8 3v4M16 3v4M5 7h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/></svg>',
   weight: '<svg viewBox="0 0 24 24"><path d="M4 18 9 12l4 3 7-8M15 7h5v5"/></svg>',
+  recipes: '<svg viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6"/></svg>',
   settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>',
 };
 
 const TABS = [
   { route: 'today', label: 'Today', render: renderToday },
   { route: 'weight', label: 'Weight', render: renderWeight },
+  { route: 'recipes', label: 'Recipes', render: renderRecipes },
   { route: 'settings', label: 'Settings', render: (view) => renderSettings(view, { onDataReplaced: route }) },
 ];
 
@@ -44,10 +47,11 @@ async function route() {
       });
       return;
     }
-    const name = location.hash.replace(/^#\/?/, '') || 'today';
+    // Routes look like #/today or #/recipes/<id>.
+    const [name, param] = location.hash.replace(/^#\/?/, '').split('/');
     const tab = TABS.find((t) => t.route === name) ?? TABS[0];
     for (const a of tabbar.querySelectorAll('.tab')) a.classList.toggle('active', a.dataset.route === tab.route);
-    await tab.render(view);
+    await tab.render(view, param);
     window.scrollTo(0, 0);
   } catch (err) {
     console.error(err);

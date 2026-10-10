@@ -274,6 +274,43 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 6px 
 .history-list li:first-child { border-top: none; }
 .history-list li > :first-child { flex: 1; }
 
+/* Logged recipes */
+.meal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+.entry-row { display: flex; align-items: center; gap: 4px; }
+.entry-row .entry { flex: 1; min-width: 0; }
+.expand { transition: transform 0.2s; margin-left: -8px; }
+.expand.open { transform: rotate(90deg); }
+.ingredient-breakdown { list-style: none; margin: 0 0 8px 32px; padding: 0; font-size: 0.88rem; }
+.ingredient-breakdown li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
+
+/* Recipes */
+.page-head.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.page-head.row h1 { margin: 0; }
+a.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+a.entry { text-decoration: none; }
+.back-link { color: var(--accent); font-weight: 600; text-decoration: none; font-size: 1.05rem; padding: 8px 0; }
+.chevron { color: var(--muted); font-size: 1.4rem; }
+.pick-list { list-style: none; margin: 0; padding: 0; max-height: 55vh; overflow-y: auto; }
+.pick-list li + li { border-top: 1px solid var(--border); }
+.recipe-nutrition { display: grid; gap: 8px; }
+.recipe-nutrition > div { display: grid; }
+.detail-list { list-style: none; margin: 4px 0 0; padding: 0; font-size: 0.9rem; }
+.detail-list li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+.detail-list li.indent-1 { padding-left: 16px; }
+.detail-list li.indent-2 { padding-left: 32px; }
+textarea, input[type="search"] {
+  width: 100%;
+  font: inherit;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+input[type="search"] { min-height: 44px; margin-bottom: 8px; }
+textarea { resize: vertical; }
+
 /* Settings */
 .target-summary { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
 .target-summary ul { list-style: none; margin: 0 0 4px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; }
