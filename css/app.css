@@ -417,6 +417,8 @@ button.choice:hover { border-color: var(--accent); }
 .import-match .grams input { width: 90px; }
 .import-kcal { margin-left: auto; font-variant-numeric: tabular-nums; }
 .warn-text { color: var(--warn); }
+.usage-meter { display: grid; gap: 8px; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin: 8px 0 12px; }
+.usage-row { display: grid; gap: 4px; }
 .errors-row { display: flex; gap: 8px; align-items: center; }
 .errors-row .errors { flex: 1; margin: 0; }
 

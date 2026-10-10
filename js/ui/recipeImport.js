@@ -10,6 +10,7 @@ import { getFoods, searchFoods, UsdaError } from '../data/usda.js';
 import { roundTo } from '../core/units.js';
 import { fmt, inputNumber } from './format.js';
 import { pickFile, shareOrDownload } from './files.js';
+import { lookupsLeft } from './usageMeter.js';
 
 // ---- Sharing ----
 
@@ -113,6 +114,15 @@ function importFromText() {
     setTimeout(() => text.focus(), 0);
     return body;
   });
+}
+
+// One search per ingredient with an amount, plus one request for portion weights.
+function lookupNote(rows, apiKey) {
+  const needed = rows.filter((r) => r.ing.quantity != null || r.ing.grams != null).length + 1;
+  const left = lookupsLeft(apiKey);
+  return left < needed
+    ? h('p', { class: 'notice' }, `This recipe needs about ${needed} lookups, but only ${left} ${left === 1 ? 'is' : 'are'} left this hour on this device. Some ingredients may not be matched — use Try again later.`)
+    : h('small', { class: 'muted' }, `Uses about ${needed} of your ${fmt(left)} lookups left this hour.`);
 }
 
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -276,6 +286,7 @@ function reviewStep(body, parsed, close) {
     h('div', { class: 'input-row' }, field('Name', name), field('Servings', servings)),
     status,
     h('div', { class: 'errors-row' }, errorBox, retryBtn),
+    lookupNote(rows, apiKey),
     !apiKey && h('p', { class: 'notice' },
       'Using the shared USDA demo key, which allows only a few lookups an hour. ',
       h('a', { href: '#/settings', onClick: () => close() }, 'Add your free key in Settings'), ' for reliable imports.'),

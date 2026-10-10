@@ -13,6 +13,7 @@ import { fmt, fmtAmount, fmtDate, fmtWeight } from '../format.js';
 import { roundTo, volumeFromDisplay, volumeLabel, volumeToDisplay, weightFromDisplay, weightToDisplay } from '../../core/units.js';
 import { checkMilestones } from '../milestones.js';
 import { looksLikeApiKey } from '../../data/usda.js';
+import { usageMeter } from '../usageMeter.js';
 
 // `focus` scrolls to a section, e.g. #/settings/bmr from the Today screen.
 export async function renderSettings(view, { onDataReplaced, focus }) {
@@ -183,6 +184,7 @@ function foodDatabaseSection(rerender) {
       'Importing a recipe looks up each ingredient in the USDA FoodData Central database. Without your own key the app uses a shared demo key that allows at most about 30 lookups an hour (one per ingredient, so only 2–3 recipes) and can run out sooner. A free personal key allows 1,000 an hour.'),
     field('USDA API key', h('div', { class: 'input-row align-center' }, key, show)),
     errorLine,
+    usageMeter(saved),
     saved
       ? h('p', {}, h('span', { class: 'muted' }, `Key saved (ends in …${saved.slice(-4)}). `),
         h('button', { class: 'link-btn', type: 'button', onClick: () => save('') }, 'Remove key'))
