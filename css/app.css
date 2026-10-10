@@ -128,8 +128,9 @@ small { font-size: 0.82rem; }
   gap: 2px;
   color: var(--muted);
   text-decoration: none;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
+  min-width: 0;
 }
 .tab.active { color: var(--accent); }
 .tab-icon svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -350,6 +351,54 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 6px 
 .legend-check { color: var(--good); font-weight: 700; }
 .chip.lit { background: var(--star-on); color: #3b2a00; border-color: transparent; }
 .center { text-align: center; }
+
+/* Report: sized as a US Letter page with half-inch margins (7.5in wide), white in both themes */
+.report-preview { overflow: hidden; margin-bottom: 16px; }
+.report-preview .report { transform-origin: top left; margin: 0; }
+.report {
+  --text: #111; --muted: #555; --border: #cfd5d1;
+  --chart-line: #1f7a55; --chart-point: #8a9c92; --chart-goal: #b8742a;
+  width: 7.5in;
+  box-sizing: content-box;
+  background: #fff;
+  color: var(--text);
+  font: 10pt/1.35 var(--font);
+  padding: 0.35in;
+  margin: 0 auto;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+}
+.report h1 { font-size: 15pt; margin: 0 0 2px; }
+.report h2 { font-size: 11.5pt; margin: 0 0 6px; padding-bottom: 2px; border-bottom: 1.5px solid #1f7a55; color: #1f7a55; }
+.report h3 { font-size: 10pt; margin: 10px 0 4px; color: var(--text); text-transform: none; letter-spacing: 0; }
+.report p { margin: 0 0 4px; }
+.report-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.report-meta, .report-note { color: var(--muted); font-size: 8.5pt; }
+.report-section { margin-top: 14px; }
+.report-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.fact-list { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; }
+.fact-list dt { color: var(--muted); }
+.fact-list dd { margin: 0; font-weight: 600; }
+.report-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; font-variant-numeric: tabular-nums; }
+.report-table th, .report-table td { padding: 2px 4px; border-bottom: 1px solid var(--border); text-align: right; }
+.report-table th { font-weight: 600; color: var(--muted); border-bottom-color: var(--text); }
+.report-table th:first-child, .report-table td:first-child, .report-table td.text { text-align: left; }
+.report-table tr.not-logged td { color: var(--muted); }
+.report .chart { max-height: 2.6in; }
+.weigh-in-grid { list-style: none; padding: 0; margin: 6px 0 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px 12px; font-size: 8.5pt; }
+.weigh-in-grid li { display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); }
+
+@page { size: letter; margin: 0.5in; }
+
+@media print {
+  body { background: #fff; }
+  .tabbar, .no-print, dialog, .toast { display: none !important; }
+  .view { padding: 0; max-width: none; }
+  .report-preview { overflow: visible; margin: 0; padding: 0; height: auto !important; }
+  .report { box-shadow: none; padding: 0; width: auto; transform: none !important; }
+  .report-table thead { display: table-header-group; }
+  .report-table tr, .keep-together, .fact-list { break-inside: avoid; }
+  .report h2, .report h3 { break-after: avoid; }
+}
 
 /* Recipes */
 .page-head.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
