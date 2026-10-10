@@ -48,22 +48,33 @@ export function searchTerms(ingredient) {
 // Forms of a food that are rarely what a recipe means unless it says so.
 const UNLIKELY = [
   'soup', 'condensed', 'babyfood', 'baby', 'dehydrated', 'dried', 'dry mix', 'mix', 'powder', 'dry', 'instant', 'nonfat',
-  'frozen', 'imitation', 'infant', 'fast food', 'restaurant',
+  'frozen', 'imitation', 'infant', 'fast food', 'restaurant', 'evaporated',
+  // Milk and cheese from other animals: "milk" in a recipe means cow's milk.
+  'sheep', 'goat', 'buffalo', 'human', 'camel',
   // Special versions: only when the recipe asks for them.
   'low-sodium', 'low sodium', 'reduced sodium', 'reduced fat', 'reduced-fat', 'low fat', 'lowfat', 'fat free', 'fat-free', 'sugar free', 'sugar-free',
 ];
-// Parts of a food ("Egg, white") — wrong unless asked for.
+// Parts of an egg ("Egg, white") — wrong unless asked for.
 const PARTS = ['white', 'yolk'];
 // The everyday form a recipe means when it just says "milk" or "eggs".
 const DEFAULT_FORMS = ['whole', 'raw', 'fresh', 'enriched', 'granulated', 'table', 'tap'];
 
 const words = (text) => text.toLowerCase().match(/[a-z]+/g) ?? [];
-const singular = (w) => (w.length > 3 && w.endsWith('es') && !w.endsWith('ses') ? w.slice(0, -2) : w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w);
+// berries → berry, tomatoes → tomato, peaches → peach, whites → white, eggs → egg.
+function singular(w) {
+  if (w.length <= 3) return w;
+  if (w.endsWith('ies')) return `${w.slice(0, -3)}y`;
+  if (/(oes|ches|shes|xes|sses)$/.test(w)) return w.slice(0, -2);
+  if (w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
+  return w;
+}
 
 // Re-orders USDA search results for a recipe ingredient. USDA's own order often puts soups and
 // mixes first (e.g. "black beans" → "Soup, black bean"), so results are scored on how well the
 // description matches the ingredient's words, with the main food word (the last one) counting most.
-export function rankCandidates(terms, foods) {
+// needsPortion: the amount is in cups, spoons or pieces, so entries from USDA's SR Legacy set —
+// which list household measures — are preferred over Foundation entries, which often don't.
+export function rankCandidates(terms, foods, { needsPortion = false } = {}) {
   const query = words(terms).map(singular);
   const head = query[query.length - 1];
   // USDA files broth and stock under "Soup, …", and powders are "dry powder", so those aren't unlikely then.
@@ -85,8 +96,10 @@ export function rankCandidates(terms, foods) {
     // All the ingredient's words in the first two parts, e.g. "Oil, olive" for "olive oil".
     if (query.length > 1 && query.every((w) => leadWords.includes(w) && !negated.has(w))) score += 2;
     for (const u of UNLIKELY) if (new RegExp(`\\b${u}\\b`).test(desc) && !allowed.has(u) && !terms.toLowerCase().includes(u)) score -= 4;
-    for (const p of PARTS) if (descWords.includes(p) && !query.includes(p)) score -= 2;
+    // Only for eggs: "white" is also how USDA names white flour, rice and bread.
+    if (query.includes('egg')) for (const p of PARTS) if (descWords.includes(p) && !query.includes(p)) score -= 2;
     for (const d of DEFAULT_FORMS) if (descWords.includes(d)) score += 1.5;
+    if (needsPortion && food.dataType === 'SR Legacy') score += 1.5;
     score -= descWords.filter((w) => !query.includes(w)).length * 0.15; // prefer plainer descriptions
     return { food, score, index };
   });
@@ -136,6 +149,29 @@ function typicalPiece(ingredient) {
   return { grams: entry.sizes[size], label: `${size} ${entry.label}` };
 }
 
+// Grams per US cup of common ingredients (USDA household measures), for when the matched entry has
+// no cup/spoon measure. First match wins, so more specific names come first.
+const CUP_WEIGHTS = [
+  [['almond', 'flour'], 96], [['whole', 'wheat', 'flour'], 120], [['bread', 'flour'], 127], [['cake', 'flour'], 114],
+  [['flour'], 125],
+  [['brown', 'sugar'], 220], [['powdered', 'sugar'], 120], [['confectioner'], 120], [['sugar'], 200],
+  [['cocoa'], 86], [['cornstarch'], 128], [['baking', 'powder'], 220], [['baking', 'soda'], 221], [['salt'], 292],
+  [['peanut', 'butter'], 258], [['butter'], 227],
+  [['olive', 'oil'], 216], [['oil'], 218],
+  [['coconut', 'milk'], 226], [['almond', 'milk'], 240], [['buttermilk'], 245], [['milk'], 244],
+  [['sour', 'cream'], 230], [['cream', 'cheese'], 232], [['cream'], 238],
+  [['yogurt'], 245], [['honey'], 339], [['maple', 'syrup'], 322], [['mayonnaise'], 220],
+  [['rice'], 185], [['oat'], 81], [['chocolate', 'chip'], 168], [['raisin'], 145],
+  [['shredded', 'cheese'], 113], [['cheddar'], 113], [['parmesan'], 100],
+  [['vanilla'], 202], [['broth'], 240], [['stock'], 240], [['water'], 237],
+];
+
+function typicalCupGrams(name) {
+  const nameWords = words(name).map(singular);
+  const hit = CUP_WEIGHTS.find(([keys]) => keys.every((k) => nameWords.some((w) => w.startsWith(k))));
+  return hit?.[1] ?? null;
+}
+
 // How a unit reads in "2 cups × 200 g per cup".
 const UNIT_LABELS = { cup: 'cup', tbsp: 'tbsp', tsp: 'tsp', floz: 'fl oz', ml: 'ml', l: 'liter', pint: 'pint', quart: 'quart', pinch: 'pinch', dash: 'dash' };
 
@@ -161,7 +197,13 @@ export function gramsFor(ingredient, portions = []) {
       const per = (unitMl / measured.ml) * measured.p.gramWeight;
       return { grams: quantity * per, method: 'portion', each: { grams: per, label } };
     }
-    // No volume measure: assume about 1 g per ml, like water.
+    // No volume measure on the entry: use a typical cup weight for common ingredients…
+    const cup = typicalCupGrams(name);
+    if (cup) {
+      const per = (unitMl / UNITS.cup.factor) * cup;
+      return { grams: quantity * per, method: 'typical', each: { grams: per, label, food: name } };
+    }
+    // …and only as a last resort assume about 1 g per ml, like water.
     return { grams: quantity * unitMl, method: 'estimate', each: { grams: unitMl, label } };
   }
 

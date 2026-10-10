@@ -138,7 +138,7 @@ function amountNote(row) {
     case 'stated': return 'Weight from the recipe';
     case 'manual': return 'Grams entered by you';
     case 'portion': return `${times} (USDA measure)`;
-    case 'typical': return `${times} (typical ${each.label})`;
+    case 'typical': return `${times} (typical ${each.food ? `${each.label} of ${each.food}` : each.label})`;
     case 'estimate': return ing.unit && UNITS[ing.unit]?.kind === 'volume'
       ? `${times} — estimated as the weight of water, so check the grams`
       : `${times} (estimated) — check the grams`;
@@ -241,7 +241,9 @@ function reviewStep(body, parsed, close) {
       for (const row of todo) {
         if (row.ing.quantity == null && row.ing.grams == null) { row.state = 'skipped'; row.render(); continue; }
         const terms = searchTerms(row.ing);
-        row.candidates = rankCandidates(terms, await searchFoods(terms, apiKey)).slice(0, 6);
+        // Cups, spoons and pieces need a household measure; a stated weight doesn't.
+        const needsPortion = row.ing.grams == null && UNITS[row.ing.unit]?.kind !== 'mass';
+        row.candidates = rankCandidates(terms, await searchFoods(terms, apiKey), { needsPortion }).slice(0, 6);
         row.fdcId = row.candidates[0]?.fdcId ?? null;
         row.state = row.fdcId ? 'matched' : 'nomatch';
         row.render();

@@ -67,7 +67,9 @@ async function call(path, params, apiKey) {
   }
 }
 
-export async function searchFoods(query, apiKey, pageSize = 12) {
+// 25 results: everyday entries (e.g. "Milk, whole") can rank below sheep's or goat's milk in USDA's
+// own order, so the app re-ranks a wider set.
+export async function searchFoods(query, apiKey, pageSize = 25) {
   const result = await call('foods/search', { query, dataType: DATA_TYPES, pageSize }, apiKey);
   return result.foods ?? [];
 }
