@@ -4,7 +4,7 @@ import * as repo from '../data/repo.js';
 import { state } from './state.js';
 import { addDays, todayStr } from '../core/dates.js';
 import { evaluateGoals } from '../core/goals.js';
-import { entryNutrients } from '../core/nutrition.js';
+import { entryNutrients, waterMl } from '../core/nutrition.js';
 import { currentValue } from '../core/trends.js';
 import { nutrientByKey } from '../core/nutrients.js';
 import { fmt, fmtWeight } from './format.js';
@@ -22,19 +22,31 @@ export async function checkMilestones() {
   try {
     const today = todayStr();
     const from = addDays(today, -LOOKBACK_DAYS);
-    const [points, entries, workouts, achieved] = await Promise.all([
+    const [points, entries, workouts, waterRecords, achieved] = await Promise.all([
       weightPoints(),
       repo.listRange('logEntries', from, today),
       repo.listRange('workouts', from, today),
+      repo.listRange('water', from, today),
       repo.listAll('milestones'),
     ]);
 
     const dailyTotals = new Map();
+    const entriesByDate = new Map();
     for (const e of entries) {
       const totals = dailyTotals.get(e.date) ?? {};
       for (const [k, v] of Object.entries(entryNutrients(e))) totals[k] = (totals[k] ?? 0) + v;
       dailyTotals.set(e.date, totals);
+      if (!entriesByDate.has(e.date)) entriesByDate.set(e.date, []);
+      entriesByDate.get(e.date).push(e);
     }
+
+    // Days the water goal was reached: plain water plus drinks that count toward it.
+    const targetMl = state.settings.water.targetMl;
+    const plainByDate = new Map(waterRecords.map((w) => [w.date, w.ml]));
+    const waterGoalDates = new Set(
+      [...new Set([...plainByDate.keys(), ...entriesByDate.keys()])]
+        .filter((date) => targetMl > 0 && waterMl(entriesByDate.get(date) ?? [], plainByDate.get(date) ?? 0) >= targetMl),
+    );
 
     const found = evaluateGoals({
       goals,
@@ -42,6 +54,7 @@ export async function checkMilestones() {
       today,
       weights: { start: points[0]?.value ?? null, current: currentValue(points, today) },
       loggedDates: new Set(entries.map((e) => e.date)),
+      waterGoalDates,
       workoutDates: workouts.map((w) => w.date),
       dailyTotals,
       achieved,
@@ -73,6 +86,11 @@ function describe(m) {
       return {
         title: `${m.days}-day logging streak!`,
         body: `You’ve logged your food every day for ${m.days} days in a row.`,
+      };
+    case 'waterStreak':
+      return {
+        title: `${m.days}-day water streak!`,
+        body: `You’ve reached your water goal every day for ${m.days} days in a row.`,
       };
     case 'workoutsPerWeek':
       return {

@@ -2,10 +2,11 @@
 // dated stores also have a [userId, date] index.
 
 const DB_NAME = 'weight-tracker';
-const DB_VERSION = 1;
+// Bump the version when adding a store; upgrades create any store that is missing.
+const DB_VERSION = 2;
 
-export const STORES = ['users', 'settings', 'logEntries', 'customFields', 'weights', 'workouts', 'activities', 'recipes', 'milestones'];
-const DATED_STORES = ['logEntries', 'weights', 'workouts'];
+export const STORES = ['users', 'settings', 'logEntries', 'customFields', 'weights', 'workouts', 'activities', 'recipes', 'milestones', 'water'];
+const DATED_STORES = ['logEntries', 'weights', 'workouts', 'water'];
 
 let dbPromise = null;
 
@@ -21,7 +22,12 @@ export function openDb() {
         if (DATED_STORES.includes(name)) store.createIndex('userId_date', ['userId', 'date']);
       }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db = request.result;
+      // Let a newer version open in another tab (e.g. after an app update) instead of blocking it.
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     request.onerror = () => reject(request.error);
   });
   return dbPromise;

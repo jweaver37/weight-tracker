@@ -53,7 +53,7 @@ function renderSetup(view, onDone) {
       return;
     }
     await repo.save('weights', { date: todayStr(), weightKg: currentWeightKg });
-    await saveSettings({ ...settings, units, profile: p, targets: t });
+    await saveSettings({ ...state.settings, units, profile: p, targets: t });
     if (t.mode === 'calculated') await recalculateTargets(currentWeightKg);
     await saveSettings({ ...state.settings, setupCompletedAt: new Date().toISOString() });
     onDone();

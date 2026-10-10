@@ -290,6 +290,11 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 6px 
 .calorie-equation { gap: 4px; }
 .calorie-equation .stat strong { font-size: clamp(1.05rem, 5vw, 1.35rem); }
 
+/* Water */
+.water { display: grid; gap: 8px; padding: 4px 0 12px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.water-actions { display: grid; grid-template-columns: 44px 1fr 1fr 1fr; gap: 6px; }
+.water-actions .btn { padding: 8px 4px; font-size: 0.9rem; }
+
 /* Goals & milestones */
 .goal { display: grid; gap: 8px; }
 .goal-options { padding: 0 4px 4px 34px; display: grid; gap: 8px; }

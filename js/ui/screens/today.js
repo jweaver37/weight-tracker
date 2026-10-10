@@ -1,9 +1,11 @@
 // Today: the day's food log by meal, with calorie and nutrient totals against targets.
-import { h, mount } from '../dom.js';
+import { h, mount, showDialog } from '../dom.js';
 import { state } from '../state.js';
 import * as repo from '../../data/repo.js';
 import { addDays, todayStr } from '../../core/dates.js';
-import { MEALS, groupByMeal, sumEntries } from '../../core/nutrition.js';
+import { MEALS, groupByMeal, sumEntries, waterMl } from '../../core/nutrition.js';
+import { volumeFromDisplay, volumeLabel, volumeToDisplay } from '../../core/units.js';
+import { field, numberInput, readNumber } from '../fields.js';
 import { nutrientByKey } from '../../core/nutrients.js';
 import { targetKind } from '../../core/targets.js';
 import { backupDaysOverdue } from '../../core/settings.js';
@@ -20,10 +22,11 @@ let currentDate = todayStr();
 
 export async function renderToday(view) {
   const s = state.settings;
-  const [entries, customFields, workouts] = await Promise.all([
+  const [entries, customFields, workouts, waterRecords] = await Promise.all([
     repo.listForDate('logEntries', currentDate),
     repo.listAll('customFields'),
     repo.listForDate('workouts', currentDate),
+    repo.listForDate('water', currentDate),
   ]);
   const byCreated = (a, b) => (a.createdAt < b.createdAt ? -1 : 1);
   entries.sort(byCreated);
@@ -31,6 +34,14 @@ export async function renderToday(view) {
   const totals = sumEntries(entries);
   const meals = groupByMeal(entries);
   const rerender = () => renderToday(view);
+
+  // Plain water is one running tally per day; drinks add their own volume on top.
+  const plainWater = waterRecords[0] ?? { date: currentDate, ml: 0 };
+  const water = { plainMl: plainWater.ml, totalMl: waterMl(entries, plainWater.ml), targetMl: s.water.targetMl };
+  const changeWater = async (deltaMl) => {
+    await repo.save('water', { ...plainWater, ml: Math.max(0, plainWater.ml + deltaMl) });
+    rerender();
+  };
 
   const actions = {
     addFood: async (meal) => { if (await openFoodEntry({ date: currentDate, meal, customFields })) rerender(); },
@@ -40,6 +51,11 @@ export async function renderToday(view) {
         ? await openRecipeEntry({ entry, customFields })
         : await openFoodEntry({ entry, date: currentDate, customFields });
       if (result) rerender();
+    },
+    addWater: (ml) => changeWater(ml),
+    customWater: async () => {
+      const ml = await askWaterAmount(s.units.volume);
+      if (ml) changeWater(ml);
     },
     workout: async (workout) => { if (await openWorkoutEntry({ entry: workout, date: currentDate })) rerender(); },
     toggle: (entry) => {
@@ -53,8 +69,8 @@ export async function renderToday(view) {
     dateNav(rerender),
     backupBanner(s, rerender),
     calorieCard(totals.nutrients.calories ?? 0, s.targets.values.calories, totalBurned(workouts)),
-    nutrientCard(totals, s, customFields),
-    MEALS.map((m) => mealSection(m, meals[m.key], actions)),
+    nutrientCard(totals, s, customFields, water),
+    MEALS.map((m) => mealSection(m, meals[m.key], actions, m.key === 'drinks' && waterTracker(water, s.units.volume, actions))),
     workoutSection(workouts, actions),
   );
   checkMilestones();
@@ -129,7 +145,7 @@ function progressBar(value, target, kind) {
     h('div', { class: 'bar-fill', style: `width:${pct}%` }));
 }
 
-function nutrientCard(totals, s, customFields) {
+function nutrientCard(totals, s, customFields, water) {
   const rows = s.visibleNutrients
     .filter((key) => key !== 'calories')
     .map((key) => nutrientByKey(key))
@@ -138,8 +154,54 @@ function nutrientCard(totals, s, customFields) {
   const custom = customFields
     .filter((f) => f.visible !== false)
     .map((f) => nutrientRow(f.name, totals.custom[f.id] ?? 0, null, f.unit, 'goal'));
-  if (!rows.length && !custom.length) return null;
-  return h('section', { class: 'card' }, h('div', { class: 'nutrient-totals' }, rows, custom));
+  const unit = s.units.volume;
+  const waterRow = nutrientRow('Water', volumeToDisplay(water.totalMl, unit), water.targetMl && volumeToDisplay(water.targetMl, unit), volumeLabel(unit), 'min');
+  return h('section', { class: 'card' }, h('div', { class: 'nutrient-totals' }, rows, waterRow, custom));
+}
+
+// Quick-add glass sizes in the user's drink unit.
+const GLASSES = { floz: [8, 16], ml: [250, 500] };
+
+function waterTracker(water, unit, actions) {
+  const [small, large] = GLASSES[unit] ?? GLASSES.floz;
+  const label = volumeLabel(unit);
+  const fromDrinks = water.totalMl - water.plainMl;
+  const target = water.targetMl ? volumeToDisplay(water.targetMl, unit) : null;
+  const total = volumeToDisplay(water.totalMl, unit);
+  return h('div', { class: 'water' },
+    h('div', { class: 'nutrient-total-head' },
+      h('strong', {}, 'Water'),
+      h('span', { class: 'muted' }, target ? `${fmt(total)} / ${fmt(target)} ${label}` : `${fmt(total)} ${label}`)),
+    target && progressBar(total, target, 'min'),
+    h('div', { class: 'water-actions' },
+      h('button', {
+        class: 'btn', type: 'button', disabled: water.plainMl <= 0, 'aria-label': `Remove ${small} ${label} of water`,
+        onClick: () => actions.addWater(-Math.min(water.plainMl, volumeFromDisplay(small, unit))),
+      }, '−'),
+      h('button', { class: 'btn', type: 'button', onClick: () => actions.addWater(volumeFromDisplay(small, unit)) }, `+${small} ${label}`),
+      h('button', { class: 'btn', type: 'button', onClick: () => actions.addWater(volumeFromDisplay(large, unit)) }, `+${large} ${label}`),
+      h('button', { class: 'btn', type: 'button', onClick: actions.customWater }, 'Custom')),
+    fromDrinks > 0 && h('small', { class: 'muted' }, `Includes ${fmt(volumeToDisplay(fromDrinks, unit))} ${label} from drinks below.`));
+}
+
+// Resolves an amount of water in ml, or undefined.
+function askWaterAmount(unit) {
+  const input = numberInput('', { 'aria-label': 'Amount of water' });
+  return showDialog((close) => {
+    const add = (ev) => {
+      ev.preventDefault();
+      const { value } = readNumber(input);
+      if (!value || value <= 0) { input.classList.add('invalid'); return; }
+      close(volumeFromDisplay(value, unit));
+    };
+    setTimeout(() => input.focus(), 0);
+    return h('form', { class: 'dialog-body', onSubmit: add },
+      h('h2', {}, 'Add water'),
+      field('Amount', h('div', { class: 'input-unit' }, input, h('span', {}, volumeLabel(unit)))),
+      h('div', { class: 'dialog-actions' },
+        h('button', { class: 'btn', type: 'button', onClick: () => close() }, 'Cancel'),
+        h('button', { class: 'btn btn-primary', type: 'submit' }, 'Add')));
+  });
 }
 
 function nutrientRow(label, value, target, unit, kind) {
@@ -151,15 +213,16 @@ function nutrientRow(label, value, target, unit, kind) {
     target ? progressBar(value, target, kind) : null);
 }
 
-function mealSection(meal, entries, actions) {
+function mealSection(meal, entries, actions, extra) {
   const kcal = entries.reduce((sum, e) => sum + entryCalories(e), 0);
   return h('section', { class: 'card meal' },
     h('div', { class: 'meal-head' },
       h('h2', {}, meal.label),
       h('span', { class: 'muted' }, entries.length ? `${fmt(kcal)} kcal` : '')),
+    extra,
     entries.length > 0 && h('ul', { class: 'entry-list' }, entries.map((e) => entryItem(e, actions))),
     h('div', { class: 'meal-actions' },
-      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => actions.addFood(meal.key) }, '+ Food'),
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => actions.addFood(meal.key) }, meal.key === 'drinks' ? '+ Drink' : '+ Food'),
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => actions.addRecipe(meal.key) }, '+ Recipe')));
 }
 

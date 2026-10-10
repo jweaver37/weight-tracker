@@ -1,11 +1,12 @@
 // Per-user settings shape and defaults.
 import { DEFAULT_VISIBLE } from './nutrients.js';
-import { lbToKg } from './units.js';
+import { lbToKg, ML_PER_FLOZ } from './units.js';
 import { defaultGoals } from './goals.js';
 
 export function defaultSettings() {
   return {
-    units: { weight: 'lb', length: 'in' },
+    units: { weight: 'lb', length: 'in', volume: 'floz' },
+    water: { targetMl: 64 * ML_PER_FLOZ },
     profile: { name: '', sex: null, birthDate: null, heightCm: null, activity: 'light', goalWeightKg: null },
     targets: {
       mode: 'calculated', // 'calculated' | 'manual'
@@ -33,6 +34,7 @@ export function withDefaults(saved) {
     ...d,
     ...saved,
     units: { ...d.units, ...saved.units },
+    water: { ...d.water, ...saved.water },
     profile: { ...d.profile, ...saved.profile },
     targets: { ...d.targets, ...saved.targets },
     goals: Object.fromEntries(Object.entries(d.goals).map(([k, v]) => [k, { ...v, ...saved.goals?.[k] }])),

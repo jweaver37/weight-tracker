@@ -7,7 +7,18 @@ export const MEALS = [
   { key: 'lunch', label: 'Lunch' },
   { key: 'dinner', label: 'Dinner' },
   { key: 'snacks', label: 'Snacks' },
+  { key: 'drinks', label: 'Drinks' },
 ];
+
+// Water for a day: the plain water tally plus drinks marked "counts toward water".
+// Drink entries store `volumeMl` per serving.
+export function waterMl(entries, plainWaterMl = 0) {
+  let total = plainWaterMl;
+  for (const e of entries) {
+    if (e.countsAsWater && Number.isFinite(e.volumeMl)) total += e.volumeMl * e.servings;
+  }
+  return total;
+}
 
 // Parses "1.5", "2", ".5", "1/2" and "1 1/2". Returns null for anything that isn't a non-negative number.
 export function parseAmount(text) {

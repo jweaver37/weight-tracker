@@ -7,6 +7,7 @@ export function defaultGoals() {
   return {
     weightLoss: { enabled: false, stepKg: lbToKg(5) },
     loggingStreak: { enabled: false, days: 7 },
+    waterStreak: { enabled: false, days: 7 },
     workoutsPerWeek: { enabled: false, perWeek: 3, weeks: 4 },
     nutrition: { enabled: false, nutrient: 'protein', days: 5 },
   };
@@ -21,11 +22,12 @@ export const GOAL_TOLERANCE = 0.1;
 export const weightLossLevel = (startKg, currentKg, stepKg) =>
   startKg != null && currentKg != null && stepKg > 0 ? Math.floor((startKg - currentKg) / stepKg + 1e-9) : 0;
 
-// Consecutive days with food logged, ending today (or yesterday when today has nothing yet).
-export function loggingStreak(loggedDates, today) {
-  let day = loggedDates.has(today) ? today : addDays(today, -1);
+// Consecutive days in `dates`, ending today (or yesterday while today isn't in it yet).
+// Used for the food-logging and water-goal streaks.
+export function dayStreak(dates, today) {
+  let day = dates.has(today) ? today : addDays(today, -1);
   let count = 0;
-  while (loggedDates.has(day)) {
+  while (dates.has(day)) {
     count++;
     day = addDays(day, -1);
   }
@@ -74,7 +76,8 @@ export function nutritionHits(dailyTotals, nutrient, target, endDate, windowDays
 // ---- Milestones ----
 // Each milestone has a unique key so it is shown once. `achieved` is the list already recorded.
 
-export function evaluateGoals({ goals, targets, today, weights, loggedDates, workoutDates, dailyTotals, achieved }) {
+// waterGoalDates: dates on which the water goal was reached.
+export function evaluateGoals({ goals, targets, today, weights, loggedDates, waterGoalDates, workoutDates, dailyTotals, achieved }) {
   const found = [];
   const seen = new Set(achieved.map((m) => m.key));
   const highest = (prefix) => Math.max(0, ...achieved.filter((m) => m.key.startsWith(prefix)).map((m) => m.level ?? 0));
@@ -92,11 +95,22 @@ export function evaluateGoals({ goals, targets, today, weights, loggedDates, wor
   // Logging streak: at every multiple of the chosen number of days.
   const ls = goals.loggingStreak;
   if (ls.enabled) {
-    const streak = loggingStreak(loggedDates, today);
+    const streak = dayStreak(loggedDates, today);
     const level = Math.floor(streak.count / ls.days);
     const prefix = `loggingStreak:${ls.days}:${streak.startDate}:`;
     if (level >= 1 && level > highest(prefix)) {
       found.push({ key: `${prefix}${level}`, type: 'loggingStreak', level, days: level * ls.days });
+    }
+  }
+
+  // Water goal streak: at every multiple of the chosen number of days.
+  const ws = goals.waterStreak;
+  if (ws.enabled) {
+    const streak = dayStreak(waterGoalDates, today);
+    const level = Math.floor(streak.count / ws.days);
+    const prefix = `waterStreak:${ws.days}:${streak.startDate}:`;
+    if (level >= 1 && level > highest(prefix)) {
+      found.push({ key: `${prefix}${level}`, type: 'waterStreak', level, days: level * ws.days });
     }
   }
 

@@ -1,6 +1,6 @@
 // Service worker: lets the installed app open offline.
 // Network-first, so new code is picked up whenever the device is online; the cache is the offline fallback.
-const CACHE = 'weight-tracker-v4';
+const CACHE = 'weight-tracker-v5';
 const SHELL = ['./', 'index.html', 'css/app.css', 'manifest.webmanifest', 'js/ui/app.js'];
 
 self.addEventListener('install', (event) => {

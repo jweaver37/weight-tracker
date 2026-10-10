@@ -6,6 +6,8 @@ import { NUTRIENTS } from '../core/nutrients.js';
 import { MEALS, entryNutrients, parseAmount } from '../core/nutrition.js';
 import * as repo from '../data/repo.js';
 import { fmt, inputNumber } from './format.js';
+import { state } from './state.js';
+import { volumeFromDisplay, volumeLabel, volumeToDisplay } from '../core/units.js';
 
 // Edits a food without saving it. `meal` shows a meal picker when given.
 // Resolves { action: 'save', food }, { action: 'delete' } or undefined (cancelled).
@@ -17,6 +19,21 @@ export function editFood({ food, customFields, meal, title, amountLabel = 'Servi
   const mealSelect = meal && selectInput(MEALS.map((m) => ({ value: m.key, label: m.label })), meal);
   const servings = numberInput(inputNumber(f.servings, 3), { placeholder: '1' });
   const servingSize = h('input', { type: 'text', value: f.servingSize ?? '', placeholder: 'e.g. 2/3 cup (55 g)' });
+
+  // Drinks also record volume, which can count toward the water goal.
+  const volumeUnit = state.settings.units.volume;
+  const volume = numberInput(f.volumeMl != null ? inputNumber(volumeToDisplay(f.volumeMl, volumeUnit), 1) : '', { 'aria-label': 'Volume per serving' });
+  const countsAsWater = h('input', { type: 'checkbox', checked: f.countsAsWater ?? true });
+  const drinkFields = h('div', { class: 'form-grid sub-form' },
+    field('Volume per serving', h('div', { class: 'input-unit' }, volume, h('span', {}, volumeLabel(volumeUnit)))),
+    h('label', { class: 'check' }, countsAsWater, h('span', {}, 'Counts toward water')));
+  const isDrink = () => mealSelect?.value === 'drinks';
+  const syncDrink = () => {
+    drinkFields.hidden = !isDrink();
+    name.placeholder = isDrink() ? 'e.g. Iced coffee' : 'e.g. Greek yogurt';
+  };
+  mealSelect?.addEventListener('change', syncDrink);
+  syncDrink();
 
   const nutrientInputs = new Map();
   const nutrientRow = (key, label, unit, value, indent = 0) => {
@@ -58,6 +75,11 @@ export function editFood({ food, customFields, meal, title, amountLabel = 'Servi
         else nutrients[key] = r.value;
       }
       if (nutrients.calories == null) errors.push('Enter calories (0 is fine).');
+      const vol = readNumber(volume);
+      if (isDrink() && !vol.empty && vol.value == null) errors.push('Volume must be a number.');
+      const drink = isDrink() && vol.value
+        ? { volumeMl: volumeFromDisplay(vol.value, volumeUnit), countsAsWater: countsAsWater.checked }
+        : { volumeMl: null, countsAsWater: false };
       if (errors.length) {
         errorBox.replaceChildren(...[...new Set(errors)].map((msg) => h('p', {}, msg)));
         return;
@@ -74,6 +96,7 @@ export function editFood({ food, customFields, meal, title, amountLabel = 'Servi
           servingSize: servingSize.value.trim() || null,
           nutrients,
           custom,
+          ...(mealSelect && drink),
         },
       });
     };
@@ -88,6 +111,7 @@ export function editFood({ food, customFields, meal, title, amountLabel = 'Servi
       field('Brand', brand),
       h('div', { class: 'input-row' }, mealSelect && field('Meal', mealSelect), field(amountLabel, servings)),
       field('Serving size', servingSize, 'As printed on the label. Amounts below are per serving.'),
+      drinkFields,
       h('h3', {}, 'Nutrition Facts (per serving)'),
       h('div', { class: 'nutrient-list' }, labelRows),
       h('details', { open: microFilled }, h('summary', {}, 'Vitamins & minerals'), h('div', { class: 'nutrient-list' }, microRows)),
@@ -129,6 +153,12 @@ export async function openFoodEntry({ entry, date, meal, customFields }) {
 export function entryAmountText(entry) {
   const n = fmt(entry.servings, 2);
   if (entry.kind === 'recipe') return `${n} of ${fmt(entry.recipeYield, 2)} servings`;
+  if (entry.volumeMl) {
+    const unit = state.settings.units.volume;
+    const volume = `${fmt(volumeToDisplay(entry.volumeMl, unit), 1)} ${volumeLabel(unit)}`;
+    const amount = entry.servings === 1 ? volume : `${n} × ${volume}`;
+    return entry.countsAsWater ? amount : `${amount} · not counted as water`;
+  }
   return entry.servingSize ? `${n} × ${entry.servingSize}` : `${n} serving${entry.servings === 1 ? '' : 's'}`;
 }
 

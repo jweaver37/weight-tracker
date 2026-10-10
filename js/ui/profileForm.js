@@ -7,8 +7,9 @@ import { lbToKg, roundTo } from '../core/units.js';
 import { todayStr } from '../core/dates.js';
 import { fmtWeight, inputNumber } from './format.js';
 
-const WEIGHT_UNITS = [{ value: 'lb', label: 'Pounds (lb)' }, { value: 'kg', label: 'Kilograms (kg)' }];
-const LENGTH_UNITS = [{ value: 'in', label: 'Inches (in)' }, { value: 'cm', label: 'Centimeters (cm)' }];
+const WEIGHT_UNITS = [{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }];
+const LENGTH_UNITS = [{ value: 'in', label: 'inches' }, { value: 'cm', label: 'cm' }];
+const VOLUME_UNITS = [{ value: 'floz', label: 'fl oz' }, { value: 'ml', label: 'ml' }];
 const SEXES = [{ value: '', label: 'Choose…' }, { value: 'female', label: 'Female' }, { value: 'male', label: 'Male' }];
 
 // read() → { units, profile, currentWeightKg }
@@ -17,6 +18,7 @@ export function profileForm(settings, { currentWeightKg, askCurrentWeight = fals
   const name = h('input', { type: 'text', value: p.name, autocomplete: 'given-name' });
   const weightUnit = selectInput(WEIGHT_UNITS, settings.units.weight);
   const lengthUnit = selectInput(LENGTH_UNITS, settings.units.length);
+  const volumeUnit = selectInput(VOLUME_UNITS, settings.units.volume);
   const sex = selectInput(SEXES, p.sex ?? '');
   const birthDate = h('input', { type: 'date', value: p.birthDate ?? '', max: todayStr() });
   const activity = selectInput(ACTIVITY_LEVELS.map((a) => ({ value: a.key, label: a.label })), p.activity);
@@ -44,7 +46,7 @@ export function profileForm(settings, { currentWeightKg, askCurrentWeight = fals
 
   const el = h('div', { class: 'form-grid' },
     field('Name', name),
-    h('div', { class: 'input-row' }, field('Weight unit', weightUnit), field('Measurement unit', lengthUnit)),
+    h('div', { class: 'input-row' }, field('Weight', weightUnit), field('Height & body', lengthUnit), field('Drinks', volumeUnit)),
     field('Sex', sex, 'Used by the calorie formula.'),
     field('Birth date', birthDate),
     field('Height', heightSlot),
@@ -57,7 +59,7 @@ export function profileForm(settings, { currentWeightKg, askCurrentWeight = fals
     el,
     weightUnit: () => weightUnit.value,
     read: () => ({
-      units: { weight: weightUnit.value, length: lengthUnit.value },
+      units: { weight: weightUnit.value, length: lengthUnit.value, volume: volumeUnit.value },
       profile: {
         ...p,
         name: name.value.trim(),

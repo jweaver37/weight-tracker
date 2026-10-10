@@ -13,9 +13,9 @@ export const weightPoints = async () => dailyValues(await repo.listAll('weights'
 // Recalculates and saves targets from the given weight (default: current 7-day average).
 // Returns { oldValues, newValues } or null when the profile is incomplete.
 export async function recalculateTargets(weightKg) {
-  const s = state.settings;
   const today = todayStr();
   const basis = weightKg ?? currentValue(await weightPoints(), today);
+  const s = state.settings;
   const result = calculateFromSettings(s, basis, today);
   if (!result) return null;
   const oldValues = s.targets.values;

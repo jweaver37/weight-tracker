@@ -10,7 +10,7 @@ import { recalculateTargets, showTargetChange, weightPoints } from '../targetsFl
 import { exportBackup, importBackup } from '../backupActions.js';
 import { DISCLAIMER_TEXT, DISCLAIMER_TITLE } from '../disclaimer.js';
 import { fmtAmount, fmtDate, fmtWeight } from '../format.js';
-import { roundTo, weightFromDisplay, weightToDisplay } from '../../core/units.js';
+import { roundTo, volumeFromDisplay, volumeLabel, volumeToDisplay, weightFromDisplay, weightToDisplay } from '../../core/units.js';
 import { checkMilestones } from '../milestones.js';
 
 export async function renderSettings(view, { onDataReplaced }) {
@@ -22,6 +22,7 @@ export async function renderSettings(view, { onDataReplaced }) {
   mount(view,
     h('header', { class: 'page-head' }, h('h1', {}, 'Settings')),
     profileSection(rerender),
+    waterSection(),
     goalsSection(points[0]),
     nutrientsSection(),
     customFieldsSection(customFields, rerender),
@@ -51,7 +52,8 @@ function profileSection(rerender) {
     }
     errorBox.replaceChildren();
     const before = s.targets.values;
-    await saveSettings({ ...s, units, profile: p, targets: t });
+    // Start from the latest settings: other sections on this page save on their own.
+    await saveSettings({ ...state.settings, units, profile: p, targets: t });
     if (t.mode === 'calculated') {
       const change = await recalculateTargets();
       if (change && CALCULATED_KEYS.some((k) => change.newValues[k] !== before[k])) {
@@ -104,6 +106,20 @@ function nutrientsSection() {
     h('details', {}, h('summary', {}, 'Vitamins & minerals'), h('div', { class: 'check-grid' }, NUTRIENTS.filter((n) => n.group === 'micro').map(box))));
 }
 
+function waterSection() {
+  const unit = state.settings.units.volume;
+  const presets = unit === 'ml' ? [2000, 2500, 3000] : [64, 80, 100];
+  const target = presetPicker(presets, roundTo(volumeToDisplay(state.settings.water.targetMl, unit), 1), { unit: volumeLabel(unit), max: unit === 'ml' ? 10000 : 340 });
+  target.el.addEventListener('change', async () => {
+    const value = target.read();
+    if (value) await saveSettings({ ...state.settings, water: { ...state.settings.water, targetMl: volumeFromDisplay(value, unit) } });
+  });
+  return h('section', { class: 'card' },
+    h('h2', {}, 'Water'),
+    h('p', { class: 'muted' }, 'Your daily water goal. Plain water plus any drinks marked “counts toward water” go toward it.'),
+    field('Daily goal', target.el));
+}
+
 function goalsSection(firstWeighIn) {
   const s = state.settings;
   const unit = s.units.weight;
@@ -134,6 +150,7 @@ function goalsSection(firstWeighIn) {
   const stepPresets = unit === 'kg' ? [1, 2, 5] : [2, 5, 10];
   const step = presetPicker(stepPresets, roundTo(weightToDisplay(s.goals.weightLoss.stepKg, unit), 2), { unit, max: unit === 'kg' ? 50 : 100 });
   const streakDays = presetPicker([7, 14, 30], s.goals.loggingStreak.days, { unit: 'days', min: 2, max: 365 });
+  const waterDays = presetPicker([3, 7, 14, 30], s.goals.waterStreak.days, { unit: 'days', min: 2, max: 365 });
   const perWeek = presetPicker([2, 3, 4, 5], s.goals.workoutsPerWeek.perWeek, { unit: 'a week', max: 14 });
   const weeks = presetPicker([2, 4, 8], s.goals.workoutsPerWeek.weeks, { unit: 'weeks', max: 52 });
   const nutrientKeys = Object.keys(s.targets.values).filter((k) => nutrientByKey(k));
@@ -152,6 +169,9 @@ function goalsSection(firstWeighIn) {
       goal('loggingStreak', 'Logging streak', 'Log food every day for this many days in a row.',
         field('Streak length', streakDays.el),
         () => { const v = streakDays.read(); return v && { days: Math.round(v) }; }),
+      goal('waterStreak', 'Water streak', 'Reach your daily water goal (set above) this many days in a row.',
+        field('Streak length', waterDays.el),
+        () => { const v = waterDays.read(); return v && { days: Math.round(v) }; }),
       goal('workoutsPerWeek', 'Workouts per week', 'Hit a number of workouts a week for several weeks running. Weeks start on Sunday.',
         h('div', { class: 'input-row' }, field('Workouts', perWeek.el), field('For', weeks.el)),
         () => { const p = perWeek.read(); const w = weeks.read(); return p && w && { perWeek: Math.round(p), weeks: Math.round(w) }; }),
