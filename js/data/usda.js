@@ -12,16 +12,40 @@ export class UsdaError extends Error {}
 // api.data.gov keys are 40 letters and digits; this catches pasting the wrong thing.
 export const looksLikeApiKey = (key) => /^[A-Za-z0-9]{32,64}$/.test(key);
 
+// USDA's service sometimes fails to answer for a moment. When it does, the browser reports only a
+// generic network error (the failed reply carries no CORS headers), so these are retried.
+const RETRY_DELAYS_MS = [700, 2000];
+const RETRYABLE_STATUS = new Set([408, 500, 502, 503, 504]);
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchWithRetry(url, options, apiKey) {
+  for (let attempt = 0; ; attempt++) {
+    recordRequest(apiKey); // counts every attempt, since USDA may count it too
+    let response = null;
+    let failure = null;
+    try {
+      response = await fetch(url, options);
+    } catch (err) {
+      failure = err;
+    }
+    const retryable = failure || RETRYABLE_STATUS.has(response.status);
+    if (!retryable || attempt >= RETRY_DELAYS_MS.length) {
+      if (failure) {
+        console.warn('USDA request failed after retries', failure);
+        throw new UsdaError(navigator.onLine === false
+          ? 'Your device is offline. Connect to the internet and tap Try again.'
+          : 'The USDA food database didn’t respond. It is sometimes briefly unavailable — tap Try again in a minute.');
+      }
+      return response;
+    }
+    await sleep(RETRY_DELAYS_MS[attempt]);
+  }
+}
+
 // The key goes in a header rather than the URL, so it never appears in logs or browser history.
 async function call(path, params, apiKey) {
   const query = new URLSearchParams(params);
-  let response;
-  try {
-    response = await fetch(`${BASE}/${path}?${query}`, { headers: { 'X-Api-Key': apiKey || DEMO_KEY } });
-  } catch {
-    throw new UsdaError('Couldn’t reach the USDA food database. Check your internet connection.');
-  }
-  recordRequest(apiKey);
+  const response = await fetchWithRetry(`${BASE}/${path}?${query}`, { headers: { 'X-Api-Key': apiKey || DEMO_KEY } }, apiKey);
   if (response.status === 429) {
     recordLimitHit(apiKey);
     throw new UsdaError(apiKey
@@ -29,8 +53,15 @@ async function call(path, params, apiKey) {
       : 'The shared USDA demo key has hit its hourly limit. Add your own free key in Settings → Food database, or try again later.');
   }
   if (response.status === 403) throw new UsdaError('The USDA API key in Settings isn’t valid.');
-  if (!response.ok) throw new UsdaError(`The USDA food database returned an error (${response.status}).`);
-  return response.json();
+  if (!response.ok) {
+    console.warn('USDA request error', response.status, await response.text().catch(() => ''));
+    throw new UsdaError(`The USDA food database returned an error (${response.status}). Tap Try again in a minute.`);
+  }
+  try {
+    return await response.json();
+  } catch {
+    throw new UsdaError('The USDA food database sent an incomplete reply. Tap Try again.');
+  }
 }
 
 export async function searchFoods(query, apiKey, pageSize = 12) {

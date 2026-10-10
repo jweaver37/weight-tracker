@@ -38,8 +38,9 @@ const ALIASES = Object.entries(UNITS)
 const FRACTIONS = { '½': 1 / 2, '⅓': 1 / 3, '⅔': 2 / 3, '¼': 1 / 4, '¾': 3 / 4, '⅕': 1 / 5, '⅖': 2 / 5, '⅗': 3 / 5, '⅘': 4 / 5, '⅙': 1 / 6, '⅚': 5 / 6, '⅛': 1 / 8, '⅜': 3 / 8, '⅝': 5 / 8, '⅞': 7 / 8 };
 const FRACTION_CHARS = Object.keys(FRACTIONS).join('');
 
-// One number: "1", "1.5", "1/2", "1 1/2", "½", "1½", "1 ½".
-const NUMBER = `(?:\\d+(?:\\.\\d+)?\\s*[${FRACTION_CHARS}]|\\d+\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d*\\.\\d+|\\d+|[${FRACTION_CHARS}])`;
+// One number: "1", "1.5", "1/2", "1 1/2", "1-1/2" (US recipes often hyphenate mixed numbers),
+// "½", "1½", "1 ½".
+const NUMBER = `(?:\\d+(?:\\.\\d+)?\\s*[${FRACTION_CHARS}]|\\d+(?:\\s+|-)\\d+\\/\\d+|\\d+\\/\\d+|\\d*\\.\\d+|\\d+|[${FRACTION_CHARS}])`;
 // A quantity is one number or a range like "2-3" or "2 to 3" (the average is used).
 const QUANTITY_RE = new RegExp(`^(${NUMBER})(?:\\s*(?:-|–|to)\\s*(${NUMBER}))?\\s*`);
 
@@ -47,7 +48,7 @@ function numberValue(text) {
   const s = text.replace(/\s+/g, ' ').trim();
   const fracChar = s.match(new RegExp(`^(\\d*)\\s*([${FRACTION_CHARS}])$`));
   if (fracChar) return Number(fracChar[1] || 0) + FRACTIONS[fracChar[2]];
-  const mixed = s.match(/^(\d+) (\d+)\/(\d+)$/);
+  const mixed = s.match(/^(\d+)[ -](\d+)\/(\d+)$/);
   if (mixed) return Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3]);
   const frac = s.match(/^(\d+)\/(\d+)$/);
   if (frac) return Number(frac[2]) ? Number(frac[1]) / Number(frac[2]) : null;
@@ -131,13 +132,23 @@ export function parseIngredientLine(line) {
   return { original, quantity, unit, name: name || original, note, grams };
 }
 
+// Recipe-site controls copied along with the text: scaling buttons ("1/2x", "1x 2x 3x") and
+// unit toggles ("US Customary", "Metric").
+const SITE_CONTROL_RE = /^(?:(?:\d+(?:\/\d+)?|[½¼¾])\s*x\s*)+$|^(?:us customary|metric|us|imperial)(?:\s*[|/]\s*(?:us customary|metric|us|imperial))*$/i;
+export const isSiteControl = (line) => SITE_CONTROL_RE.test(line.replace(BULLETS_RE, '').trim());
+
 // Lines that start with an amount look like ingredients.
-const looksLikeIngredient = (line) => QUANTITY_RE.test(line.replace(BULLETS_RE, '').trim());
+const looksLikeIngredient = (line) => !isSiteControl(line) && QUANTITY_RE.test(line.replace(BULLETS_RE, '').trim());
+
+// A real ingredient names a food: at least two letters once the amount and unit are removed.
+const namesAFood = (ingredient) => /\p{L}{2,}/u.test(ingredient.name);
 
 const INGREDIENTS_HEAD = /^ingredients?\s*:?$/i;
 const STEPS_HEAD = /^(instructions?|directions?|method|preparation|steps?|how to make it)\s*:?$/i;
 const NOTES_HEAD = /^(notes?|tips?|nutrition( facts| information)?)\s*:?$/i;
-const SERVINGS_RE = /\b(?:serves|servings?|yields?|makes)\b\s*:?\s*(\d+)/i;
+// Photo captions recipe sites put under each step, e.g. "Jane Doe / Food Stylist: …".
+const PHOTO_CREDIT_RE = /\b(food stylist|prop stylist|photo(?:graph)? by|photo credit|image credit)\b/i;
+const SERVINGS_RE =/\b(?:serves|servings?|yields?|makes)\b\s*:?\s*(\d+)/i;
 const TIME_RE = (label) => new RegExp(`${label}\\s*time\\s*:?\\s*(?:(\\d+)\\s*(?:hours?|hrs?|h)\\s*)?(?:(\\d+)\\s*(?:minutes?|mins?|m))?`, 'i');
 
 function minutesFrom(text, label) {
@@ -148,7 +159,7 @@ function minutesFrom(text, label) {
 
 // Splits pasted recipe text into its parts. Works with or without "Ingredients" / "Instructions" headings.
 export function parseRecipeText(text) {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !isSiteControl(l));
   const all = lines.join('\n');
   const servingsMatch = all.match(SERVINGS_RE);
 
@@ -164,7 +175,8 @@ export function parseRecipeText(text) {
   if (ingIdx >= 0) {
     const ingEnd = stepIdx >= 0 ? stepIdx : lines.length;
     headerLines = lines.slice(0, ingIdx);
-    ingredientLines = lines.slice(ingIdx + 1, ingEnd).filter((l) => !isSubheading(l) && !NOTES_HEAD.test(l));
+    // Skip notes inside the list such as "Original recipe (1X) yields 24 servings".
+    ingredientLines = lines.slice(ingIdx + 1, ingEnd).filter((l) => !isSubheading(l) && !NOTES_HEAD.test(l) && !isMeta(l));
     stepLines = stepIdx >= 0 ? lines.slice(stepIdx + 1) : [];
   } else {
     // No headings: the first run of amount-led lines is the ingredient list; what follows is the method.
@@ -187,8 +199,8 @@ export function parseRecipeText(text) {
     yieldServings: servingsMatch ? Number(servingsMatch[1]) : null,
     prepMinutes: minutesFrom(all, 'prep(?:aration)?'),
     cookMinutes: minutesFrom(all, 'cook(?:ing)?'),
-    ingredients: ingredientLines.map(parseIngredientLine).filter(Boolean),
-    instructions: stepLines.filter((l) => !STEPS_HEAD.test(l)).join('\n'),
+    ingredients: ingredientLines.map(parseIngredientLine).filter((i) => i && namesAFood(i)),
+    instructions: stepLines.filter((l) => !STEPS_HEAD.test(l) && !PHOTO_CREDIT_RE.test(l)).join('\n'),
     notes,
   };
 }

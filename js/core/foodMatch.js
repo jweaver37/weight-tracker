@@ -36,7 +36,7 @@ export const scaleTo = (per100, grams) =>
 
 // Words that describe preparation rather than the food, removed before searching.
 // ("ground" and "lean" stay: ground or lean meat has different nutrition.)
-const FILLER = /\b(fresh|freshly|chopped|diced|minced|sliced|shredded|grated|large|medium|small|extra|virgin|boneless|skinless|finely|roughly|thinly|packed|softened|melted|divided|optional|organic|to taste|for garnish|about|plus more)\b/gi;
+const FILLER = /\b(fresh|freshly|chopped|diced|minced|sliced|shredded|grated|large|medium|small|extra|virgin|boneless|skinless|finely|roughly|thinly|packed|softened|melted|divided|optional|organic|boiling|hot|warm|cold|room temperature|to taste|for garnish|about|plus more)\b/gi;
 
 export function searchTerms(ingredient) {
   const cleaned = ingredient.name.replace(FILLER, ' ').replace(/[^\p{L}\s-]/gu, ' ').replace(/\s+/g, ' ').trim();
@@ -46,7 +46,11 @@ export function searchTerms(ingredient) {
 }
 
 // Forms of a food that are rarely what a recipe means unless it says so.
-const UNLIKELY = ['soup', 'condensed', 'babyfood', 'baby', 'dehydrated', 'dry mix', 'mix', 'powder', 'frozen', 'imitation', 'infant', 'fast food', 'restaurant'];
+const UNLIKELY = ['soup', 'condensed', 'babyfood', 'baby', 'dehydrated', 'dry mix', 'mix', 'powder', 'dry', 'instant', 'nonfat', 'frozen', 'imitation', 'infant', 'fast food', 'restaurant'];
+// Parts of a food ("Egg, white") — wrong unless asked for.
+const PARTS = ['white', 'yolk'];
+// The everyday form a recipe means when it just says "milk" or "eggs".
+const DEFAULT_FORMS = ['whole', 'raw', 'fresh', 'enriched', 'granulated', 'table', 'tap'];
 
 const words = (text) => text.toLowerCase().match(/[a-z]+/g) ?? [];
 const singular = (w) => (w.length > 3 && w.endsWith('es') && !w.endsWith('ses') ? w.slice(0, -2) : w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w);
@@ -57,8 +61,11 @@ const singular = (w) => (w.length > 3 && w.endsWith('es') && !w.endsWith('ses') 
 export function rankCandidates(terms, foods) {
   const query = words(terms).map(singular);
   const head = query[query.length - 1];
-  // USDA files broth and stock under "Soup, …", so soups aren't unlikely for them.
-  const allowed = new Set(/\b(broth|stock|bouillon)\b/i.test(terms) ? ['soup'] : []);
+  // USDA files broth and stock under "Soup, …", and powders are "dry powder", so those aren't unlikely then.
+  const allowed = new Set([
+    ...(/\b(broth|stock|bouillon)\b/i.test(terms) ? ['soup'] : []),
+    ...(/\bpowder\b/i.test(terms) ? ['dry'] : []),
+  ]);
   const scored = foods.map((food, index) => {
     const desc = food.description.toLowerCase();
     // "Chicken, canned, no broth" is chicken without broth: words after "no"/"without" don't count.
@@ -72,7 +79,9 @@ export function rankCandidates(terms, foods) {
     if (head && firstPart.includes(head)) score += 3;
     // All the ingredient's words in the first two parts, e.g. "Oil, olive" for "olive oil".
     if (query.length > 1 && query.every((w) => leadWords.includes(w) && !negated.has(w))) score += 2;
-    for (const u of UNLIKELY) if (desc.includes(u) && !allowed.has(u) && !terms.toLowerCase().includes(u)) score -= 4;
+    for (const u of UNLIKELY) if (new RegExp(`\\b${u}\\b`).test(desc) && !allowed.has(u) && !terms.toLowerCase().includes(u)) score -= 4;
+    for (const p of PARTS) if (descWords.includes(p) && !query.includes(p)) score -= 2;
+    for (const d of DEFAULT_FORMS) if (descWords.includes(d)) score += 1.5;
     score -= descWords.filter((w) => !query.includes(w)).length * 0.15; // prefer plainer descriptions
     return { food, score, index };
   });
