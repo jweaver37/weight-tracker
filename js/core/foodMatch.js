@@ -39,7 +39,10 @@ export const scaleTo = (per100, grams) =>
 const FILLER = /\b(fresh|freshly|chopped|diced|minced|sliced|shredded|grated|large|medium|small|extra|virgin|boneless|skinless|finely|roughly|thinly|packed|softened|melted|divided|optional|organic|boiling|hot|warm|cold|room temperature|to taste|for garnish|about|plus more)\b/gi;
 
 export function searchTerms(ingredient) {
-  const cleaned = ingredient.name.replace(FILLER, ' ').replace(/[^\p{L}\s-]/gu, ' ').replace(/\s+/g, ' ').trim();
+  const cleaned = ingredient.name.replace(FILLER, ' ').replace(/[^\p{L}\s-]/gu, ' ')
+    // Hyphens left over once a word is removed ("extra-virgin olive oil" → "- olive oil").
+    .replace(/(^|\s)-+|-+(?=\s|$)/g, ' ')
+    .replace(/\s+/g, ' ').trim();
   const terms = cleaned || ingredient.name;
   // A canned ingredient matches USDA's canned entries better when the search says so.
   return ingredient.unit === 'can' && !/canned/i.test(terms) ? `${terms} canned` : terms;
@@ -60,6 +63,7 @@ const PARTS = ['white', 'yolk'];
 const DEFAULT_FORMS = ['whole', 'raw', 'fresh', 'enriched', 'granulated', 'table', 'tap'];
 
 const words = (text) => text.toLowerCase().match(/[a-z]+/g) ?? [];
+const squash = (text) => text.toLowerCase().replace(/[-\s]/g, '');
 // berries → berry, tomatoes → tomato, peaches → peach, whites → white, eggs → egg.
 function singular(w) {
   if (w.length <= 3) return w;
@@ -95,7 +99,8 @@ export function rankCandidates(terms, foods, { needsPortion = false } = {}) {
     if (head && firstPart.includes(head)) score += 3;
     // All the ingredient's words in the first two parts, e.g. "Oil, olive" for "olive oil".
     if (query.length > 1 && query.every((w) => leadWords.includes(w) && !negated.has(w))) score += 2;
-    for (const u of UNLIKELY) if (new RegExp(`\\b${u}\\b`).test(desc) && !allowed.has(u) && !terms.toLowerCase().includes(u)) score -= 4;
+    // "Asked for" ignores hyphens and spaces, so "low-fat" in the recipe matches USDA's "lowfat".
+    for (const u of UNLIKELY) if (new RegExp(`\\b${u}\\b`).test(desc) && !allowed.has(u) && !squash(terms).includes(squash(u))) score -= 4;
     // Only for eggs: "white" is also how USDA names white flour, rice and bread.
     if (query.includes('egg')) for (const p of PARTS) if (descWords.includes(p) && !query.includes(p)) score -= 2;
     for (const d of DEFAULT_FORMS) if (descWords.includes(d)) score += 1.5;

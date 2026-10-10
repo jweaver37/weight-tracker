@@ -436,10 +436,19 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 6px 
 .diet-main strong { font-size: 0.92rem; }
 .diet-source { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .diet-source.set { color: var(--accent); }
-.entry-kcal { display: grid; justify-items: end; text-align: right; }
+.entry-kcal { display: grid; justify-items: end; text-align: right; white-space: nowrap; }
 .sort-label { font-weight: 500; font-size: 0.72rem; }
 .diet-explain { display: grid; gap: 2px; }
 .diet-explain p { margin: 0 0 2px; }
+
+/* Recipe photos */
+.photo-field { display: grid; gap: 8px; }
+.photo-preview { width: 100%; max-height: 240px; object-fit: cover; border-radius: 10px; display: block; }
+.recipe-thumb { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; flex: none; }
+.recipe-thumb.placeholder { background: var(--surface-2); }
+.import-form .input-row.three > * { min-width: 0; }
+.whole-page { border: 1px dashed var(--border); border-radius: 10px; padding: 8px 12px; display: grid; gap: 8px; }
+.whole-page[open] { padding-bottom: 12px; }
 
 /* Recipe import */
 button.choice { width: 100%; text-align: left; font: inherit; color: inherit; background: var(--surface); }

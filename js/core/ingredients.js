@@ -84,10 +84,28 @@ const massToGrams = (value, unitText) => {
   return value * UNITS.lb.factor;
 };
 
+// Text copied from web pages often carries markdown-style links "[text](https://…)", bare URLs and
+// footnote stars. Keep the link text, drop the addresses.
+export function cleanPastedLine(line) {
+  return String(line)
+    .replace(/\[([^\]]*)\]\((?:[^()]|\([^)]*\))*\)/g, '$1')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/(\S)\*+(?=\s|$)/g, '$1')
+    .replace(/^\*+(?=\S)/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Words that start a preparation note after a comma ("onion, diced", "salt, to taste").
+const PREP_NOTE_RE = /^(chopped|diced|minced|sliced|grated|shredded|crushed|pressed|peeled|seeded|cored|halved|quartered|cubed|julienned|trimmed|cut|torn|divided|drained|rinsed|softened|melted|beaten|whisked|sifted|packed|thawed|cooked|uncooked|at room temperature|room temperature|to taste|optional|for |plus |or |about |roughly|finely|thinly|coarsely|freshly|lightly|well|see |if |as needed|such as|preferably|patted|cleaned|stemmed|pitted|zested|juiced|toasted|warmed|chilled|cold|hot|boiled|mashed)/i;
+
+// Size words that can come before a unit: "1 large can", "2 heaping tablespoons".
+const SIZE_BEFORE_UNIT_RE = /^(small|medium|large|extra-large|heaping|heaped|level|scant|generous|rounded)\s+/i;
+
 // Returns { original, quantity, unit, name, note, grams } or null for a blank line.
 // quantity is null for amounts like "salt, to taste"; grams is set only when the line states a weight.
 export function parseIngredientLine(line) {
-  const original = line.replace(BULLETS_RE, '').replace(/\s+/g, ' ').trim();
+  const original = cleanPastedLine(line.replace(BULLETS_RE, ''));
   if (!original) return null;
   let rest = original;
   let quantity = null;
@@ -109,7 +127,13 @@ export function parseIngredientLine(line) {
     rest = rest.replace(paren[0], '').trim();
   }
 
-  const u = unitAt(rest);
+  let u = unitAt(rest);
+  // "1 large can (28 ounces) tomatoes": look past the size word for the unit.
+  const size = rest.match(SIZE_BEFORE_UNIT_RE);
+  if (!u && size) {
+    const afterSize = unitAt(rest.slice(size[0].length));
+    if (afterSize) u = afterSize;
+  }
   if (u) {
     unit = u.key;
     rest = u.rest;
@@ -126,9 +150,25 @@ export function parseIngredientLine(line) {
   }
   if (grams == null && unit && UNITS[unit].kind === 'mass' && quantity != null) grams = quantity * UNITS[unit].factor;
 
-  const [namePart, ...noteParts] = rest.split(',');
-  const name = namePart.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
-  const note = noteParts.join(',').trim() || null;
+  // The name ends where a preparation note starts: "garlic, minced" or "basil + more for garnish".
+  // A comma inside the name stays: "low-moisture, part-skim mozzarella".
+  let namePart = rest;
+  let note = null;
+  const plus = rest.search(/\s\+\s/);
+  if (plus >= 0) {
+    note = rest.slice(plus + 3).trim();
+    namePart = rest.slice(0, plus);
+  }
+  const commas = [...namePart.matchAll(/,/g)].map((m) => m.index);
+  const noteComma = commas.find((i) => PREP_NOTE_RE.test(namePart.slice(i + 1).trim()));
+  if (noteComma != null) {
+    note = [namePart.slice(noteComma + 1).trim(), note].filter(Boolean).join(', ');
+    namePart = namePart.slice(0, noteComma);
+  } else if (commas.length && !/\p{L}/u.test(namePart.slice(commas[commas.length - 1] + 1))) {
+    namePart = namePart.slice(0, commas[commas.length - 1]);
+  }
+  const name = namePart.replace(/\([^)]*\)/g, '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+  note ||= null;
   return { original, quantity, unit, name: name || original, note, grams };
 }
 
@@ -156,6 +196,41 @@ function minutesFrom(text, label) {
   if (!m || (!m[1] && !m[2])) return null;
   return Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0);
 }
+
+// Amount-free lines that are still real ingredients ("black pepper, to taste").
+const NO_AMOUNT_OK_RE = /\b(to taste|as needed|for garnish|for serving|for topping|optional|pinch|dash|handful|splash|drizzle)\b/i;
+
+// Reads an ingredient list pasted into its own box: one ingredient per line. Section headings
+// ("Veggies and spinach", "For the sauce:") and recipe-site controls are skipped.
+export function parseIngredientList(text) {
+  return String(text ?? '').split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !isSiteControl(l) && !INGREDIENTS_HEAD.test(l))
+    .map(parseIngredientLine)
+    .filter((i) => i && namesAFood(i) && (i.quantity != null || i.grams != null || NO_AMOUNT_OK_RE.test(i.original)) && !/:$/.test(i.original));
+}
+
+// Cleans pasted directions: removes web addresses, and drops lines that were only a link (ads such
+// as "Sponsored by …" that land between steps) along with photo credits. Numbered steps are
+// renumbered so removed lines don't leave gaps.
+const STEP_NUMBER_RE = /^(\d+[.)]|step \d+:?)\s*/i;
+export function cleanDirections(text) {
+  const lines = String(text ?? '').split(/\r?\n/)
+    .map((raw) => {
+      const line = raw.trim();
+      const withoutNumber = line.replace(STEP_NUMBER_RE, '');
+      // A line that is nothing but a link: drop it.
+      if (/^\[[^\]]*\]\((?:[^()]|\([^)]*\))*\)$/.test(withoutNumber) || /^https?:\/\/\S+$/.test(withoutNumber)) return '';
+      return cleanPastedLine(line);
+    })
+    .filter((l) => l && !PHOTO_CREDIT_RE.test(l) && !STEPS_HEAD.test(l));
+  const numbered = lines.filter((l) => STEP_NUMBER_RE.test(l)).length;
+  if (numbered < lines.length / 2) return lines.join('\n');
+  let n = 0;
+  return lines.map((l) => (STEP_NUMBER_RE.test(l) ? `${++n}. ${l.replace(STEP_NUMBER_RE, '')}` : l)).join('\n');
+}
+
+export const cleanNotes = (text) => String(text ?? '').split(/\r?\n/).map(cleanPastedLine).filter(Boolean).join('\n');
 
 // Splits pasted recipe text into its parts. Works with or without "Ingredients" / "Instructions" headings.
 export function parseRecipeText(text) {
@@ -193,14 +268,16 @@ export function parseRecipeText(text) {
   const notes = notesAt >= 0 ? stepLines.slice(notesAt + 1).join('\n') : '';
   if (notesAt >= 0) stepLines = stepLines.slice(0, notesAt);
 
-  const name = headerLines.find((l) => !isMeta(l) && l.length <= 100) ?? '';
+  const name = cleanPastedLine(headerLines.find((l) => !isMeta(l) && l.length <= 100) ?? '');
   return {
     name,
     yieldServings: servingsMatch ? Number(servingsMatch[1]) : null,
     prepMinutes: minutesFrom(all, 'prep(?:aration)?'),
     cookMinutes: minutesFrom(all, 'cook(?:ing)?'),
-    ingredients: ingredientLines.map(parseIngredientLine).filter((i) => i && namesAFood(i)),
-    instructions: stepLines.filter((l) => !STEPS_HEAD.test(l) && !PHOTO_CREDIT_RE.test(l)).join('\n'),
-    notes,
+    // Same reading as the separate boxes: headings skipped, links and ads removed.
+    ingredients: parseIngredientList(ingredientLines.join('\n')),
+    ingredientsText: ingredientLines.filter((l) => !isSiteControl(l)).map(cleanPastedLine).join('\n'),
+    instructions: cleanDirections(stepLines.join('\n')),
+    notes: cleanNotes(notes),
   };
 }

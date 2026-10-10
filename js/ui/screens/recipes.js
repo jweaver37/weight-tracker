@@ -16,6 +16,7 @@ import { fmt, fmtAmount, inputNumber } from '../format.js';
 import { macroLine, nutrientDetails } from '../nutritionSummary.js';
 import { ingredientList, logRecipe, recipeDisplayName } from '../recipeLog.js';
 import { openImport, shareRecipe } from '../recipeImport.js';
+import { pickRecipePhoto } from '../imagePick.js';
 
 // ---- The list: search, sort and filter ----
 
@@ -127,6 +128,7 @@ export async function renderRecipes(view, id) {
       nutrients: prefs.nutrients,
       maxCalories: prefs.fitsToday ? caloriesLeft : null,
     }), prefs.sort, prefs.direction);
+    const anyPhotos = shown.some((i) => i.recipe.image);
     const shownKey = nutrientByKey(prefs.sort) ? prefs.sort : 'calories';
     const shownNutrient = nutrientByKey(shownKey);
     mount(results,
@@ -141,6 +143,10 @@ export async function renderRecipes(view, id) {
           const value = per.nutrients[shownKey];
           return h('li', {},
             h('a', { class: 'entry', href: `#/recipes/${r.id}` },
+              r.image
+                ? h('img', { class: 'recipe-thumb', src: r.image, alt: '', loading: 'lazy' })
+                // Blank squares keep photos lined up, but only once some recipe has a photo.
+                : anyPhotos && h('span', { class: 'recipe-thumb placeholder', 'aria-hidden': 'true' }),
               h('span', { class: 'entry-main' },
                 h('span', { class: 'entry-name' }, recipeDisplayName(r)),
                 h('small', { class: 'muted' },
@@ -250,6 +256,21 @@ async function renderEditor(view, id) {
     return area;
   };
 
+  // Photo: shown at the top of the recipe and as a thumbnail in the list.
+  const photoSlot = h('div', { class: 'photo-field' });
+  const renderPhoto = () => mount(photoSlot,
+    recipe.image && h('img', { class: 'photo-preview', src: recipe.image, alt: `Photo of ${recipeDisplayName(recipe)}` }),
+    h('div', { class: 'button-row tight' },
+      h('button', {
+        class: 'btn btn-small', type: 'button',
+        onClick: async () => {
+          const img = await pickRecipePhoto();
+          if (img) { recipe.image = img; renderPhoto(); persistSoon(); }
+        },
+      }, recipe.image ? 'Change photo' : '+ Add photo'),
+      recipe.image && h('button', { class: 'link-btn', type: 'button', onClick: () => { delete recipe.image; renderPhoto(); persistSoon(); } }, 'Remove photo')));
+  renderPhoto();
+
   // Meals the recipe suits (for filtering, and listed first when logging that meal).
   const mealChips = h('div', { class: 'chip-row', role: 'group', 'aria-label': 'Meals' });
   const renderMeals = () => mount(mealChips, MEALS.map((m) => {
@@ -339,6 +360,7 @@ async function renderEditor(view, id) {
       h('a', { class: 'back-link', href: '#/recipes' }, '‹ Recipes'),
       status),
     h('section', { class: 'card form-grid' },
+      photoSlot,
       field('Recipe name', name),
       field('Makes how many servings?', yieldInput)),
     h('section', { class: 'card form-grid' },

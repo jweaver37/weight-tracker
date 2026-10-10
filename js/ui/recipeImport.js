@@ -3,7 +3,8 @@ import { h, infoDialog, mount, showDialog, toast } from './dom.js';
 import { field, numberInput, readNumber } from './fields.js';
 import * as repo from '../data/repo.js';
 import { state } from './state.js';
-import { parseRecipeText, UNITS } from '../core/ingredients.js';
+import { cleanDirections, cleanNotes, cleanPastedLine, parseIngredientList, parseRecipeText, UNITS } from '../core/ingredients.js';
+import { pickRecipePhoto } from './imagePick.js';
 import { gramsFor, per100g, rankCandidates, scaleTo, searchTerms } from '../core/foodMatch.js';
 import { buildRecipeFile, readRecipeFile, recipeFileName } from '../core/recipeShare.js';
 import { getFoods, searchFoods, UsdaError } from '../data/usda.js';
@@ -31,7 +32,7 @@ export function openImport() {
     h('div', { class: 'dialog-body' },
       h('h2', {}, 'Import a recipe'),
       h('button', { class: 'choice', type: 'button', onClick: () => { close(); importFromText(); } },
-        h('span', {}, h('strong', {}, 'Paste a recipe'), h('small', {}, 'Copy a recipe from any website and paste it. Nutrition is looked up in the USDA food database.'))),
+        h('span', {}, h('strong', {}, 'From a website'), h('small', {}, 'Copy the title, ingredients and steps from any recipe site into their own boxes, and add a photo. Nutrition is looked up in the USDA food database.'))),
       h('button', { class: 'choice', type: 'button', onClick: () => { close(); importFromFile(); } },
         h('span', {}, h('strong', {}, 'Open a shared recipe file'), h('small', {}, 'A .recipe.json file a friend sent you from Weight Tracker.'))),
       h('div', { class: 'dialog-actions' }, h('button', { class: 'btn', type: 'button', onClick: () => close() }, 'Cancel'))));
@@ -87,31 +88,95 @@ function chooseFields(fields, recipeName) {
 
 // ---- From pasted text ----
 
+// One box per part of the recipe: every site lays its page out differently, so the person copies
+// each part into its own box. A whole-page paste can still fill the boxes in, for checking.
 function importFromText() {
   return showDialog((close) => {
-    const text = h('textarea', { rows: 12, placeholder: 'Paste the recipe here: its name, servings, ingredient list and steps.' });
-    const body = h('form', { class: 'dialog-body' });
-    const read = (ev) => {
+    const body = h('form', { class: 'dialog-body import-form' });
+    const title = h('input', { type: 'text', placeholder: 'e.g. Best Vegetable Lasagna', 'aria-label': 'Recipe title' });
+    const servings = numberInput('', { inputmode: 'numeric', placeholder: '4', 'aria-label': 'Servings' });
+    const prep = numberInput('', { inputmode: 'numeric', 'aria-label': 'Prep time in minutes' });
+    const cook = numberInput('', { inputmode: 'numeric', 'aria-label': 'Cook time in minutes' });
+    const ingredients = h('textarea', { rows: 8, placeholder: '2 cups white sugar\n1 ¾ cups all-purpose flour\n2 large eggs\n…' });
+    const directions = h('textarea', { rows: 6, placeholder: '1. Preheat the oven to 350°F.\n2. Stir the dry ingredients together.\n…' });
+    const notes = h('textarea', { rows: 3, placeholder: 'Tips, substitutions… (optional)' });
+    const errorLine = h('p', { class: 'errors' });
+
+    // Photo
+    let image = null;
+    const photoSlot = h('div', { class: 'photo-field' });
+    const renderPhoto = () => mount(photoSlot,
+      image && h('img', { class: 'photo-preview', src: image, alt: 'Recipe photo' }),
+      h('div', { class: 'button-row tight' },
+        h('button', { class: 'btn btn-small', type: 'button', onClick: async () => { const img = await pickRecipePhoto(); if (img) { image = img; renderPhoto(); } } }, image ? 'Change photo' : '+ Add photo'),
+        image && h('button', { class: 'link-btn', type: 'button', onClick: () => { image = null; renderPhoto(); } }, 'Remove')));
+    renderPhoto();
+
+    // Whole-page shortcut: fills the boxes, which the person then checks.
+    const wholePage = h('textarea', { rows: 6, placeholder: 'Paste everything copied from the recipe page…' });
+    const fillNote = h('p', { class: 'muted', role: 'status' });
+    const fill = () => {
+      const p = parseRecipeText(wholePage.value);
+      if (p.name) title.value = p.name;
+      if (p.yieldServings) servings.value = p.yieldServings;
+      if (p.prepMinutes != null) prep.value = p.prepMinutes;
+      if (p.cookMinutes != null) cook.value = p.cookMinutes;
+      ingredients.value = p.ingredientsText;
+      directions.value = p.instructions;
+      notes.value = p.notes;
+      fillNote.textContent = p.ingredients.length
+        ? `Filled in ${p.ingredients.length} ingredients. Check each box above — remove anything that isn’t part of the recipe.`
+        : 'Couldn’t find an ingredient list in that text. Copy just the ingredients into the Ingredients box instead.';
+      body.scrollTop = 0;
+    };
+
+    const next = (ev) => {
       ev.preventDefault();
-      const parsed = parseRecipeText(text.value);
-      if (!parsed.ingredients.length) {
-        text.classList.add('invalid');
-        errorLine.textContent = 'No ingredients found. Make sure the ingredient list (lines like “1 cup rice”) is included.';
+      const parsedIngredients = parseIngredientList(ingredients.value);
+      if (!parsedIngredients.length) {
+        ingredients.classList.add('invalid');
+        errorLine.textContent = 'Add the ingredients, one per line (like “1 cup rice”).';
+        ingredients.focus();
         return;
       }
-      reviewStep(body, parsed, close);
+      const minutes = (input) => readNumber(input).value;
+      reviewStep(body, {
+        name: cleanPastedLine(title.value),
+        yieldServings: readNumber(servings).value,
+        prepMinutes: minutes(prep),
+        cookMinutes: minutes(cook),
+        ingredients: parsedIngredients,
+        instructions: cleanDirections(directions.value),
+        notes: cleanNotes(notes.value),
+        image,
+      }, close);
     };
-    const errorLine = h('p', { class: 'errors' });
+
     mount(body,
-      h('h2', {}, 'Paste a recipe'),
-      h('p', { class: 'muted' }, 'On the recipe’s web page, select from the title down to the end of the steps, copy, and paste below.'),
-      text,
+      h('h2', {}, 'Import a recipe'),
+      h('p', { class: 'muted' }, 'Copy each part of the recipe from the website into its box. Only Ingredients is required.'),
+      field('Title', title),
+      h('div', { class: 'input-row three' },
+        field('Servings', servings),
+        field('Prep (min)', prep),
+        field('Cook (min)', cook)),
+      field('Ingredients', ingredients, 'One ingredient per line, with its amount. Section headings and links are ignored.'),
+      field('Directions', directions, 'Optional. Ads and links pasted along with the steps are removed.'),
+      field('Notes', notes),
+      h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Photo'), photoSlot,
+        h('small', { class: 'field-hint' }, 'Optional. Save the picture from the recipe page, or take your own, then choose it here.')),
+      h('details', { class: 'whole-page' },
+        h('summary', {}, 'Or paste the whole page to fill these in'),
+        h('p', { class: 'muted' }, 'Works on many sites, but every site is laid out differently — always check the boxes afterwards.'),
+        wholePage,
+        h('button', { class: 'btn btn-small', type: 'button', onClick: fill }, 'Fill in the boxes'),
+        fillNote),
       errorLine,
       h('div', { class: 'dialog-actions' },
         h('button', { class: 'btn', type: 'button', onClick: () => close() }, 'Cancel'),
-        h('button', { class: 'btn btn-primary', type: 'submit' }, 'Read recipe')));
-    body.onsubmit = read; // the review step replaces this with its own handler
-    setTimeout(() => text.focus(), 0);
+        h('button', { class: 'btn btn-primary', type: 'submit' }, 'Look up nutrition')));
+    body.onsubmit = next; // the review step replaces this with its own handler
+    setTimeout(() => title.focus(), 0);
     return body;
   });
 }
@@ -289,6 +354,7 @@ function reviewStep(body, parsed, close) {
       cookMinutes: parsed.cookMinutes,
       instructions: parsed.instructions,
       notes: parsed.notes,
+      ...(parsed.image && { image: parsed.image }),
       ingredients,
     });
     close();
