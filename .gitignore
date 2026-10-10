@@ -1,0 +1,6 @@
+# Local tool config
+.claude/
+.vscode/
+
+# Backups exported from the app contain personal data
+weight-tracker-backup-*.json
