@@ -14,7 +14,7 @@ import { field, numberInput, readNumber, selectInput } from '../fields.js';
 import { editFood } from '../foodEntry.js';
 import { fmt, fmtAmount, inputNumber } from '../format.js';
 import { macroLine, nutrientDetails } from '../nutritionSummary.js';
-import { ingredientList, logRecipe, recipeDisplayName } from '../recipeLog.js';
+import { ingredientList, logRecipe, recipeDisplayName, swapHandlers } from '../recipeLog.js';
 import { openImport, shareRecipe } from '../recipeImport.js';
 import { pickRecipePhoto } from '../imagePick.js';
 import { cleanSource, photoIsOwn, safeWebUrl, siteName } from '../../core/source.js';
@@ -356,7 +356,13 @@ async function renderEditor(view, id) {
     await persist();
   };
 
-  const renderIngredients = () => mount(ingredientsSlot, ingredientList(recipe.ingredients, editIngredient));
+  const swaps = swapHandlers(() => recipe.ingredients, (list) => { recipe.ingredients = list; }, async () => {
+    renderIngredients();
+    renderNutrition();
+    renderDiet();
+    await persist();
+  });
+  const renderIngredients = () => mount(ingredientsSlot, ingredientList(recipe.ingredients, editIngredient, swaps));
   const renderNutrition = () => {
     const per = perServing(recipe.ingredients, recipe.yieldServings);
     const total = recipeTotals(recipe.ingredients);

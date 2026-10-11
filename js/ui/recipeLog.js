@@ -7,6 +7,7 @@ import { perServing, recipeLogEntry, refreshRecipeEntry } from '../core/recipes.
 import { editFood, entryAmountText, entryCalories } from './foodEntry.js';
 import { fmt, inputNumber } from './format.js';
 import { macroLine, nutrientDetails } from './nutritionSummary.js';
+import { hasSubstitutes, openSubstitutes, swappedFromText } from './substituteDialog.js';
 
 export const recipeDisplayName = (recipe) => recipe.name || 'Untitled recipe';
 
@@ -114,8 +115,10 @@ export function openRecipeEntry({ entry, customFields }) {
     update();
   };
 
+  // Swaps here change only this day's copy, like other edits in this dialog.
+  const swaps = swapHandlers(() => ingredients, (list) => { ingredients = list; }, () => { renderIngredients(); update(); });
   const renderIngredients = () => {
-    listSlot.replaceChildren(ingredientList(ingredients, editIngredient));
+    listSlot.replaceChildren(ingredientList(ingredients, editIngredient, swaps));
   };
   renderIngredients();
   update();
@@ -152,13 +155,39 @@ export function openRecipeEntry({ entry, customFields }) {
 }
 
 // Ingredient rows (tap to edit) plus an add button. onEdit(index) — index undefined means add.
-export function ingredientList(ingredients, onEdit) {
+// With onSwap/onUndo, ingredients that have common substitutes get a "Swap" button, and swapped ones
+// show what they replaced with an Undo link.
+export function ingredientList(ingredients, onEdit, { onSwap, onUndo } = {}) {
   return h('div', {},
     ingredients.length > 0 && h('ul', { class: 'entry-list' }, ingredients.map((ing, i) => h('li', {},
-      h('button', { class: 'entry', type: 'button', onClick: () => onEdit(i) },
-        h('span', { class: 'entry-main' },
-          h('span', { class: 'entry-name' }, ing.name),
-          h('small', { class: 'muted' }, [ing.brand, entryAmountText(ing)].filter(Boolean).join(' · '))),
-        h('span', { class: 'entry-kcal' }, fmt(entryCalories(ing))))))),
+      h('div', { class: 'entry-row' },
+        h('button', { class: 'entry', type: 'button', onClick: () => onEdit(i) },
+          h('span', { class: 'entry-main' },
+            h('span', { class: 'entry-name' }, ing.name),
+            h('small', { class: 'muted' }, [ing.brand, entryAmountText(ing)].filter(Boolean).join(' · '))),
+          h('span', { class: 'entry-kcal' }, fmt(entryCalories(ing)))),
+        onSwap && hasSubstitutes(ing.swappedFrom ?? ing) && h('button', {
+          class: 'btn btn-small swap-btn', type: 'button', 'aria-label': `Swap ${ing.name} for a substitute`, onClick: () => onSwap(i),
+        }, '⇄ Swap')),
+      ing.swappedFrom && onUndo && h('small', { class: 'swapped-note' }, `${swappedFromText(ing)} · `,
+        h('button', { class: 'link-btn', type: 'button', onClick: () => onUndo(i) }, 'Undo'))))),
     h('button', { class: 'btn btn-ghost btn-block', type: 'button', onClick: () => onEdit(undefined) }, '+ Add ingredient'));
+}
+
+// Swap / undo handlers for an ingredient array held by `getList` / `setList`; `after` re-renders and saves.
+export function swapHandlers(getList, setList, after) {
+  return {
+    onSwap: async (i) => {
+      const current = getList()[i];
+      // Swapping a swapped ingredient again offers substitutes for the original.
+      const replacement = await openSubstitutes(current.swappedFrom ? { ...current.swappedFrom } : current);
+      if (!replacement) return;
+      setList(getList().map((x, j) => (j === i ? replacement : x)));
+      after();
+    },
+    onUndo: (i) => {
+      setList(getList().map((x, j) => (j === i && x.swappedFrom ? x.swappedFrom : x)));
+      after();
+    },
+  };
 }

@@ -453,6 +453,17 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 6px 
 .credit-line { margin: -4px 0 0; font-size: 0.88rem; color: var(--muted); }
 .credit-line a { font-weight: 600; }
 
+/* Ingredient swaps */
+.swap-btn { flex: none; padding: 4px 10px; min-height: 32px; font-size: 0.8rem; }
+.swapped-note { display: block; margin: -6px 0 6px; color: var(--accent); font-size: 0.8rem; }
+.swap-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.swap-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
+.swap-card p { margin: 0; font-size: 0.9rem; }
+.swap-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tag-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.swap-tag { font-size: 0.72rem; font-weight: 700; padding: 1px 7px; border-radius: 6px; background: var(--surface-2); color: var(--muted); }
+.swap-tag.on { background: var(--accent-soft); color: var(--accent); }
+
 /* Recipe import */
 button.choice { width: 100%; text-align: left; font: inherit; color: inherit; background: var(--surface); }
 button.choice:hover { border-color: var(--accent); }
