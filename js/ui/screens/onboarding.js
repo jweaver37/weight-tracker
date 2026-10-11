@@ -8,6 +8,7 @@ import { profileForm, targetsForm } from '../profileForm.js';
 import { recalculateTargets } from '../targetsFlow.js';
 import { DISCLAIMER_TEXT, DISCLAIMER_TITLE } from '../disclaimer.js';
 import { importBackup } from '../backupActions.js';
+import { BASELINE_INTRO, BASELINE_REMINDER } from '../baselineText.js';
 
 export function renderOnboarding(view, onDone) {
   if (!state.settings.disclaimerAcceptedAt) renderDisclaimer(view, onDone);
@@ -69,6 +70,10 @@ function renderSetup(view, onDone) {
       h('p', { class: 'muted' }, 'You can change any of this later in Settings.'),
       profile.el),
     h('section', { class: 'card' }, h('h2', {}, 'Daily targets'), targets.el),
+    h('section', { class: 'card' },
+      h('h2', {}, 'Your first week'),
+      h('p', {}, BASELINE_INTRO),
+      h('p', { class: 'muted' }, BASELINE_REMINDER)),
     errorBox,
     h('button', { class: 'btn btn-primary btn-block', type: 'button', onClick: finish }, 'Finish setup'),
     h('button', { class: 'btn btn-link btn-block', type: 'button', onClick: restore }, 'Moving from another device? Import a backup'),

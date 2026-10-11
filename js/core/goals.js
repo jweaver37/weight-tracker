@@ -82,13 +82,15 @@ export function evaluateGoals({ goals, targets, today, weights, loggedDates, wat
   const seen = new Set(achieved.map((m) => m.key));
   const highest = (prefix) => Math.max(0, ...achieved.filter((m) => m.key.startsWith(prefix)).map((m) => m.level ?? 0));
 
-  // Weight loss: one milestone per step of 7-day-average loss from the first weigh-in.
+  // Weight loss: one milestone per step of 7-day-average loss from the baseline (weights.start;
+  // null until the baseline is set). weights.baselineStart ties them to that baseline, so a new
+  // baseline earns them again.
   const wl = goals.weightLoss;
   if (wl.enabled && weights.start != null) {
     const level = weightLossLevel(weights.start, weights.current, wl.stepKg);
-    const prefix = `weightLoss:${wl.stepKg.toFixed(3)}:`;
+    const prefix = `weightLoss:${weights.baselineStart}:${wl.stepKg.toFixed(3)}:`;
     if (level >= 1 && level > highest(prefix)) {
-      found.push({ key: `${prefix}${level}`, type: 'weightLoss', level, lostKg: level * wl.stepKg, startKg: weights.start, currentKg: weights.current });
+      found.push({ key: `${prefix}${level}`, type: 'weightLoss', level, lostKg: level * wl.stepKg, startKg: weights.start, currentKg: weights.current, baselineStart: weights.baselineStart });
     }
   }
 

@@ -96,12 +96,12 @@ function summaryCard(points, s, today) {
   if (!points.length) return null;
   const unit = s.units.weight;
   const current = currentValue(points, today);
-  const start = points[0].value;
+  const start = s.baseline?.weightKg ?? points[0].value;
   const goal = s.profile.goalWeightKg;
   const change = current - start;
   return h('section', { class: 'card stats-row' },
     statBlock(fmtWeight(current, unit), '7-day average'),
-    statBlock(`${change > 0 ? '+' : change < 0 ? '−' : ''}${fmtWeight(Math.abs(change), unit)}`, 'Since start'),
+    statBlock(`${change > 0 ? '+' : change < 0 ? '−' : ''}${fmtWeight(Math.abs(change), unit)}`, s.baseline ? 'Since baseline' : 'Since start'),
     goal ? statBlock(current > goal ? fmtWeight(current - goal, unit) : 'Reached!', 'To goal') : null);
 }
 

@@ -20,6 +20,9 @@ export function defaultSettings() {
       calculatedAt: null,
     },
     goals: defaultGoals(),
+    // Set once from the first 7 weigh-ins (see baseline.js), then left as is: { weightKg, weighIns, startDate, setOn }.
+    baseline: null,
+    baselineFrom: null, // set by "Start a new baseline": only weigh-ins from this date count
     rings: { daysPerWeek: 5 }, // days a week the "on target" weekly rings ask for
     usda: { apiKey: '' }, // blank = shared DEMO_KEY
     // The diet the person follows (null = none) and, for flexitarians, meat-free days a week to aim for.

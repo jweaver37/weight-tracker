@@ -60,7 +60,8 @@ async function route() {
     for (const a of tabbar.querySelectorAll('.tab')) a.classList.toggle('active', a.dataset.route === tab.route);
     await tab.render(view, param);
     window.scrollTo(0, 0);
-    checkMilestones();
+    // The Goals tab shows the baseline and trophies, so refresh it after new ones.
+    if (await checkMilestones() && tab.route === 'goals' && location.hash.startsWith('#/goals')) await tab.render(view, param);
   } catch (err) {
     console.error(err);
     view.replaceChildren(h('section', { class: 'card errors' }, h('h2', {}, 'Something went wrong'), h('p', {}, String(err.message ?? err))));

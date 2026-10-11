@@ -330,6 +330,25 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 6px 
   background: var(--accent-soft); color: var(--accent); font-size: 2rem;
 }
 .milestone .dialog-actions { width: 100%; }
+.milestone-badge.small { width: 44px; height: 44px; font-size: 1.4rem; flex: none; }
+
+/* Baseline and weight facts (Goals tab) */
+.baseline-dots { display: flex; gap: 8px; margin: 4px 0 10px; }
+.baseline-dots span { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--accent); }
+.baseline-dots span.on { background: var(--accent); }
+.weight-facts { margin: 0; display: grid; gap: 10px; }
+.weight-facts div { display: grid; grid-template-columns: 9.5em 1fr; gap: 8px; align-items: baseline; }
+.weight-facts dt { color: var(--muted); font-size: 0.9rem; }
+.weight-facts dd { margin: 0; display: grid; }
+
+.baseline-control { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.baseline-control p { margin: 0; }
+
+/* Trophy Room */
+.trophy-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.trophy-list li { display: flex; gap: 12px; align-items: flex-start; }
+.trophy-list li > div { display: grid; min-width: 0; }
+.trophy-list p { margin: 2px 0 0; font-size: 0.9rem; }
 
 /* Goal rings */
 .ring-red { --ring: var(--ring-red); }

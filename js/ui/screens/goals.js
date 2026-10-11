@@ -8,6 +8,11 @@ import { volumeLabel, volumeToDisplay } from '../../core/units.js';
 import { fmt, fmtDate, fmtWeight } from '../format.js';
 import { ringChart } from '../ringChart.js';
 import { weightPoints } from '../targetsFlow.js';
+import { averageOver, currentValue } from '../../core/trends.js';
+import { BASELINE_WEIGH_INS, baselineProgress } from '../../core/baseline.js';
+import { weightLossLevel } from '../../core/goals.js';
+import { describeMilestone, trophyBadge } from '../milestones.js';
+import { BASELINE_REMINDER } from '../baselineText.js';
 
 let anchor = todayStr();
 
@@ -16,11 +21,12 @@ export async function renderGoals(view) {
   const today = todayStr();
   if (anchor > today) anchor = today;
   const range = dataRange(anchor, today);
-  const [entries, workouts, water, points] = await Promise.all([
+  const [entries, workouts, water, points, trophies] = await Promise.all([
     repo.listRange('logEntries', range.start, range.end),
     repo.listRange('workouts', range.start, range.end),
     repo.listRange('water', range.start, range.end),
     weightPoints(),
+    repo.listAll('milestones'),
   ]);
   const days = buildDaySummaries({ entries, workouts, water });
   const data = { anchor, today, days, points };
@@ -28,9 +34,76 @@ export async function renderGoals(view) {
 
   mount(view,
     dateNav(today, rerender),
+    weightCard(points, s, today),
     ['day', 'week', 'month'].map((period) => periodCard(evaluatePeriod(s, period, data), today, s)),
     h('p', { class: 'muted center' },
-      'Rings come from your targets and goals. ', h('a', { href: '#/settings' }, 'Change them in Settings'), '.'));
+      'Rings come from your targets and goals. ', h('a', { href: '#/settings' }, 'Change them in Settings'), '.'),
+    trophyRoom(trophies));
+}
+
+// Baseline and rolling 7-day average. Until the baseline is set, shows how it's coming along.
+function weightCard(points, s, today) {
+  const unit = s.units.weight;
+  const w = (kg) => fmtWeight(kg, unit);
+  const short = (d) => fmtDate(d, { month: 'short', day: 'numeric' });
+  const baseline = s.baseline;
+
+  if (!baseline) {
+    const b = baselineProgress(points, today, s.baselineFrom);
+    const count = b?.weighIns ?? 0;
+    const avg = averageOver(points, today, 7);
+    return h('section', { class: 'card' },
+      h('div', { class: 'card-head' }, h('h2', {}, 'Setting Your Baseline'), h('span', { class: 'muted' }, `${count} of ${BASELINE_WEIGH_INS}`)),
+      h('div', { class: 'baseline-dots', role: 'img', 'aria-label': `${count} of ${BASELINE_WEIGH_INS} weigh-ins` },
+        Array.from({ length: BASELINE_WEIGH_INS }, (_, i) => h('span', { class: i < count ? 'on' : '' }))),
+      b
+        ? h('p', {}, `Average so far: `, h('strong', {}, w(b.weightKg)), ` · Window ends ${short(b.endDate)}`)
+        : h('p', {}, h('a', { href: '#/weight' }, 'Log a weigh-in'), ' to start.'),
+      avg != null && h('p', {}, '7-day average: ', h('strong', {}, w(avg))),
+      h('p', { class: 'muted' }, BASELINE_REMINDER));
+  }
+
+  const avg = averageOver(points, today, 7);
+  const recent = points.filter((p) => p.date > addDays(today, -7) && p.date <= today).length;
+  const current = avg ?? currentValue(points, today);
+  const change = current == null ? null : current - baseline.weightKg;
+  const wl = s.goals.weightLoss;
+  let next = null;
+  if (wl.enabled && current != null) {
+    const nextLost = (weightLossLevel(baseline.weightKg, current, wl.stepKg) + 1) * wl.stepKg;
+    const at = baseline.weightKg - nextLost;
+    next = `${w(nextLost)} lost, at ${w(at)} (${w(Math.max(0, current - at))} to go)`;
+  }
+  return h('section', { class: 'card' },
+    h('h2', {}, 'Your Weight'),
+    h('dl', { class: 'weight-facts' },
+      fact('Baseline', w(baseline.weightKg), `Set ${fmtDate(baseline.setOn, { month: 'short', day: 'numeric', year: 'numeric' })} from ${baseline.weighIns} weigh-in${baseline.weighIns === 1 ? '' : 's'}`),
+      fact('7-day average', current == null ? '–' : w(current),
+        avg == null ? 'No weigh-ins in the last 7 days; showing your latest' : `From ${recent} weigh-in${recent === 1 ? '' : 's'} in the last 7 days`),
+      change != null && fact(change > 0 ? 'Gained since baseline' : 'Lost since baseline', w(Math.abs(change))),
+      next && fact('Next milestone', next)));
+}
+
+const fact = (label, value, note) =>
+  h('div', {}, h('dt', {}, label), h('dd', {}, h('strong', {}, value), note && h('small', { class: 'muted' }, note)));
+
+// Every milestone reached, newest first.
+function trophyRoom(trophies) {
+  const shown = trophies.filter((m) => m.acknowledgedAt)
+    .sort((a, b) => (a.achievedOn === b.achievedOn ? (a.createdAt < b.createdAt ? 1 : -1) : a.achievedOn < b.achievedOn ? 1 : -1));
+  return h('section', { class: 'card' },
+    h('div', { class: 'card-head' }, h('h2', {}, 'Trophy Room'), shown.length > 0 && h('span', { class: 'muted' }, String(shown.length))),
+    shown.length
+      ? h('ul', { class: 'trophy-list' }, shown.map((m) => {
+        const { title, body } = describeMilestone(m);
+        return h('li', {},
+          trophyBadge(true),
+          h('div', {},
+            h('strong', {}, title),
+            h('small', { class: 'muted' }, fmtDate(m.achievedOn, { month: 'short', day: 'numeric', year: 'numeric' })),
+            h('p', {}, body)));
+      }))
+      : h('p', { class: 'muted' }, 'Trophies you earn are kept here. Your first comes when your baseline is set.'));
 }
 
 function dateNav(today, rerender) {

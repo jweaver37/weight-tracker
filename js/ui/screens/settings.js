@@ -6,12 +6,13 @@ import { CUSTOM_FIELD_UNITS, NUTRIENTS, nutrientByKey } from '../../core/nutrien
 import { canCalculate, CALCULATED_KEYS } from '../../core/targets.js';
 import { field, numberInput, presetPicker, readNumber, selectInput } from '../fields.js';
 import { profileForm, targetsForm } from '../profileForm.js';
-import { energyBreakdown, recalculateTargets, showTargetChange, weightPoints } from '../targetsFlow.js';
+import { energyBreakdown, recalculateTargets, showTargetChange } from '../targetsFlow.js';
 import { exportBackup, importBackup } from '../backupActions.js';
 import { DISCLAIMER_TEXT, DISCLAIMER_TITLE } from '../disclaimer.js';
 import { fmt, fmtAmount, fmtDate, fmtWeight } from '../format.js';
 import { roundTo, volumeFromDisplay, volumeLabel, volumeToDisplay, weightFromDisplay, weightToDisplay } from '../../core/units.js';
 import { checkMilestones } from '../milestones.js';
+import { todayStr } from '../../core/dates.js';
 import { looksLikeApiKey } from '../../data/usda.js';
 import { usageMeter } from '../usageMeter.js';
 import { FOLLOWED_DIETS } from '../../core/diet.js';
@@ -19,8 +20,8 @@ import { FOLLOWED_DIETS } from '../../core/diet.js';
 // `focus` scrolls to a section, e.g. #/settings/bmr from the Today screen.
 export async function renderSettings(view, { onDataReplaced, focus }) {
   const byName = (a, b) => a.name.localeCompare(b.name);
-  const [customFields, activities, points, breakdown] = await Promise.all([
-    repo.listAll('customFields'), repo.listAll('activities'), weightPoints(), energyBreakdown(),
+  const [customFields, activities, breakdown] = await Promise.all([
+    repo.listAll('customFields'), repo.listAll('activities'), energyBreakdown(),
   ]);
   customFields.sort(byName);
   activities.sort(byName);
@@ -30,7 +31,7 @@ export async function renderSettings(view, { onDataReplaced, focus }) {
     profileSection(rerender, breakdown),
     waterSection(),
     dietSection(rerender),
-    goalsSection(points[0]),
+    goalsSection(rerender),
     nutrientsSection(),
     customFieldsSection(customFields, rerender),
     activitiesSection(activities, rerender),
@@ -249,7 +250,33 @@ function waterSection() {
     field('Daily goal', target.el));
 }
 
-function goalsSection(firstWeighIn) {
+// The baseline, and starting a new one (e.g. after a long break).
+function baselineControl(rerender) {
+  const s = state.settings;
+  const unit = s.units.weight;
+  const restart = async () => {
+    const ok = await confirmDialog(
+      'Your Baseline Set trophy will be removed. A new baseline is set from your next 7 weigh-ins, starting today, and the trophy is earned again then. ' +
+      'Weight-loss milestones will be measured from the new baseline; trophies you’ve already earned stay in your Trophy Room.',
+      { title: 'Start a new baseline?', okLabel: 'Start New Baseline', danger: true });
+    if (!ok) return;
+    for (const m of await repo.listAll('milestones')) if (m.type === 'baseline') await repo.remove('milestones', m.id);
+    await saveSettings({ ...state.settings, baseline: null, baselineFrom: todayStr() });
+    toast('New baseline started');
+    rerender();
+  };
+  return h('div', { class: 'baseline-control' },
+    h('p', {},
+      h('strong', {}, 'Baseline: '),
+      s.baseline
+        ? `${fmtWeight(s.baseline.weightKg, unit)}, set ${fmtDate(s.baseline.setOn, { month: 'short', day: 'numeric', year: 'numeric' })}`
+        : s.baselineFrom
+          ? `being set from weigh-ins since ${fmtDate(s.baselineFrom, { month: 'short', day: 'numeric' })}`
+          : 'being set from your first 7 weigh-ins'),
+    s.baseline && h('button', { class: 'btn', type: 'button', onClick: restart }, 'Start a New Baseline'));
+}
+
+function goalsSection(rerender) {
   const s = state.settings;
   const unit = s.units.weight;
 
@@ -293,11 +320,12 @@ function goalsSection(firstWeighIn) {
 
   return h('section', { class: 'card' },
     h('h2', {}, 'Goals & milestones'),
+    baselineControl(rerender),
     h('p', { class: 'muted' }, 'Turn on a goal to track it. When you reach a milestone you’ll get a message showing what changed.'),
     h('div', { class: 'form-grid' },
-      goal('weightLoss', 'Weight loss', firstWeighIn
-        ? `A milestone each time your 7-day average drops by this much from your first weigh-in (${fmtWeight(firstWeighIn.value, unit)} on ${fmtDate(firstWeighIn.date)}).`
-        : 'A milestone each time your 7-day average drops by this much from your first weigh-in.',
+      goal('weightLoss', 'Weight loss', s.baseline
+        ? `A milestone each time your 7-day average drops by this much from your baseline (${fmtWeight(s.baseline.weightKg, unit)}, set ${fmtDate(s.baseline.setOn)}).`
+        : 'A milestone each time your 7-day average drops by this much from your baseline, the average of your first 7 weigh-ins.',
       field('Every', step.el),
       () => { const v = step.read(); return v && { stepKg: weightFromDisplay(v, unit) }; }),
       goal('loggingStreak', 'Logging streak', 'Log food every day for this many days in a row.',
