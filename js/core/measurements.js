@@ -20,17 +20,18 @@ export function defaultBodySettings() {
     enabled: false,
     bothSides: false, // arms, thighs and calves: left only, or left and right
     neck: false,
-    hips: false, // always measured for women
+    hips: false, // measured for women while the body-fat estimate is on
     calves: false,
     composition: false, // show estimated body fat and BMI
   };
 }
 
-// Optional measurements that are required anyway: neck while the body-fat estimate is on (it needs
-// it), and hips for women. Returns the reason, or null.
+// Optional measurements the body-fat estimate needs while it's on: neck, and hips for women.
+// Returns the reason, or null.
 export function requiredReason(key, body, sex) {
-  if (key === 'neck' && body.composition) return 'Required while body fat and BMI estimates are on.';
-  if (key === 'hips' && sex === 'female') return 'Required for women (your profile says female).';
+  if (!body.composition) return null;
+  if (key === 'neck') return 'Required while body fat and BMI estimates are on.';
+  if (key === 'hips' && sex === 'female') return 'Required for women while body fat and BMI estimates are on.';
   return null;
 }
 
