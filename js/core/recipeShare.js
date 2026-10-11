@@ -1,6 +1,7 @@
 // Recipe files for sharing with friends: one recipe, with no personal data or device ids.
 import { MEALS } from './nutrition.js';
 import { DIET_KEYS } from './diet.js';
+import { cleanSource, isFromSource, photoIsOwn } from './source.js';
 
 const MEAL_KEYS = MEALS.map((m) => m.key);
 const APP_ID = 'WeightTracker';
@@ -10,8 +11,12 @@ export const RECIPE_FILE_VERSION = 1;
 const INGREDIENT_FIELDS = ['kind', 'name', 'brand', 'servings', 'servingSize', 'nutrients', 'volumeMl', 'countsAsWater', 'source'];
 
 // Custom-field values are keyed by field id, which differs per person, so the file names the fields.
-export function buildRecipeFile(recipe, customFields) {
+// include.steps / include.photo: whether to pass on the directions and notes, and the photo. For a
+// recipe from someone else these are the creator's own writing and picture, so sharing defaults to
+// leaving them out and sending the source link instead (see shareDefaults).
+export function buildRecipeFile(recipe, customFields, include = { steps: true, photo: true }) {
   const usedFieldIds = new Set((recipe.ingredients ?? []).flatMap((i) => Object.keys(i.custom ?? {})));
+  const source = cleanSource(recipe.source);
   return {
     app: APP_ID,
     kind: KIND,
@@ -23,17 +28,25 @@ export function buildRecipeFile(recipe, customFields) {
       yieldServings: recipe.yieldServings,
       prepMinutes: recipe.prepMinutes ?? null,
       cookMinutes: recipe.cookMinutes ?? null,
-      instructions: recipe.instructions ?? '',
-      notes: recipe.notes ?? '',
+      instructions: include.steps ? recipe.instructions ?? '' : '',
+      notes: include.steps ? recipe.notes ?? '' : '',
       meals: recipe.meals ?? [],
       dietOverrides: recipe.dietOverrides ?? {},
-      ...(recipe.image && { image: recipe.image }),
+      ...(source && { source }),
+      ...(include.photo && recipe.image && { image: recipe.image }),
       ingredients: (recipe.ingredients ?? []).map((i) => ({
         ...Object.fromEntries(INGREDIENT_FIELDS.filter((k) => i[k] !== undefined).map((k) => [k, i[k]])),
         custom: i.custom ?? {},
       })),
     },
   };
+}
+
+// What sharing includes unless the person changes it: everything for their own recipes; for a
+// recipe from a website, only the ingredients, nutrition and source link (and their own photo).
+export function shareDefaults(recipe) {
+  const fromSource = isFromSource(recipe);
+  return { steps: !fromSource, photo: Boolean(recipe.image) && photoIsOwn(recipe) };
 }
 
 // Returns { recipe, missingFields } ready to save. Custom-field values are kept when this person
@@ -70,6 +83,7 @@ export function readRecipeFile(text, localFields) {
     instructions: String(r.instructions ?? ''),
     notes: String(r.notes ?? ''),
     meals: (Array.isArray(r.meals) ? r.meals : []).filter((m) => MEAL_KEYS.includes(m)),
+    ...(cleanSource(r.source) && { source: cleanSource(r.source) }),
     // Only small JPEG/PNG/WebP photos in the formats the app makes are accepted.
     ...(typeof r.image === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(r.image) && r.image.length < 3_000_000 && { image: r.image }),
     dietOverrides: Object.fromEntries(Object.entries(r.dietOverrides && typeof r.dietOverrides === 'object' ? r.dietOverrides : {})
@@ -82,7 +96,10 @@ export function readRecipeFile(text, localFields) {
       servingSize: i.servingSize ?? null,
       nutrients: Object.fromEntries(Object.entries(i.nutrients ?? {}).filter(([, v]) => Number.isFinite(v))),
       custom: Object.fromEntries(Object.entries(i.custom ?? {}).filter(([id, v]) => match.has(id) && Number.isFinite(v)).map(([id, v]) => [match.get(id), v])),
-      ...(i.source && { source: i.source }),
+      // The USDA match an ingredient came from (kept for reference; only known fields).
+      ...(Number.isFinite(i.source?.fdcId) && {
+        source: { type: 'usda', fdcId: i.source.fdcId, description: String(i.source.description ?? '').slice(0, 200), grams: Number.isFinite(i.source.grams) ? i.source.grams : null },
+      }),
     })),
   };
   return { recipe, missingFields: missing };

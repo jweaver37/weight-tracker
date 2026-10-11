@@ -17,6 +17,7 @@ import { macroLine, nutrientDetails } from '../nutritionSummary.js';
 import { ingredientList, logRecipe, recipeDisplayName } from '../recipeLog.js';
 import { openImport, shareRecipe } from '../recipeImport.js';
 import { pickRecipePhoto } from '../imagePick.js';
+import { cleanSource, photoIsOwn, safeWebUrl, siteName } from '../../core/source.js';
 
 // ---- The list: search, sort and filter ----
 
@@ -271,6 +272,39 @@ async function renderEditor(view, id) {
       recipe.image && h('button', { class: 'link-btn', type: 'button', onClick: () => { delete recipe.image; renderPhoto(); persistSoon(); } }, 'Remove photo')));
   renderPhoto();
 
+  // Source: link, creator and where the photo came from. Credit shows under the name.
+  const creditSlot = h('div', {});
+  const renderCredit = () => {
+    const src = recipe.source;
+    mount(creditSlot, (src?.url || src?.author) && h('p', { class: 'credit-line' },
+      'From ', src.author ? h('strong', {}, src.author) : null, src.author && src.url ? ' · ' : null,
+      src.url && h('a', { href: src.url, target: '_blank', rel: 'noopener noreferrer' }, `${siteName(src.url)} ↗`)));
+  };
+  const setSource = (patch) => {
+    recipe.source = cleanSource({ ...recipe.source, ...patch });
+    if (!recipe.source) delete recipe.source;
+    renderCredit();
+    persistSoon();
+  };
+  const sourceUrl = h('input', {
+    type: 'text', inputmode: 'url', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false',
+    value: recipe.source?.url ?? '', placeholder: 'https://…', 'aria-label': 'Source link',
+  });
+  sourceUrl.addEventListener('change', () => {
+    const text = sourceUrl.value.trim();
+    const url = text ? safeWebUrl(text) : null;
+    sourceUrl.classList.toggle('invalid', Boolean(text) && !url);
+    if (text && !url) return;
+    if (url) sourceUrl.value = url;
+    setSource({ url });
+  });
+  const author = h('input', { type: 'text', value: recipe.source?.author ?? '', placeholder: 'e.g. Kathryne Taylor', 'aria-label': 'Creator' });
+  author.addEventListener('change', () => setSource({ author: author.value }));
+  const photoFrom = selectInput([{ value: 'own', label: 'Me — my own photo' }, { value: 'source', label: 'The recipe’s source' }],
+    photoIsOwn(recipe) ? 'own' : 'source');
+  photoFrom.addEventListener('change', () => setSource({ photo: photoFrom.value }));
+  renderCredit();
+
   // Meals the recipe suits (for filtering, and listed first when logging that meal).
   const mealChips = h('div', { class: 'chip-row', role: 'group', 'aria-label': 'Meals' });
   const renderMeals = () => mount(mealChips, MEALS.map((m) => {
@@ -362,6 +396,7 @@ async function renderEditor(view, id) {
     h('section', { class: 'card form-grid' },
       photoSlot,
       field('Recipe name', name),
+      creditSlot,
       field('Makes how many servings?', yieldInput)),
     h('section', { class: 'card form-grid' },
       h('h2', {}, 'Meals & diet'),
@@ -372,8 +407,16 @@ async function renderEditor(view, id) {
     h('section', { class: 'card form-grid' },
       h('h2', {}, 'Preparation'),
       h('div', { class: 'input-row' }, field('Prep time', minutesInput('prepMinutes')), field('Cook time', minutesInput('cookMinutes'))),
-      field('Instructions', textArea('instructions', 'Steps, one per line')),
-      field('Notes', textArea('notes', 'Tips, substitutions, where the recipe came from…'))),
+      field('Instructions', textArea('instructions', !recipe.instructions && recipe.source?.url
+        ? `Not included — see the original recipe at ${siteName(recipe.source.url)} (link above), or write your own steps.`
+        : 'Steps, one per line')),
+      field('Notes', textArea('notes', 'Tips, substitutions…'))),
+    h('section', { class: 'card form-grid' },
+      h('h2', {}, 'Source'),
+      h('p', { class: 'muted' }, 'Credit the recipe’s creator. When you share a recipe from someone else, the link goes along so your friend can see the original.'),
+      field('Source link', sourceUrl),
+      field('Creator', author),
+      recipe.image && field('Photo is from', photoFrom, 'Photos from a website aren’t shared unless you choose to include them.')),
     h('div', { class: 'button-row' }, logBtn, shareBtn, deleteBtn));
 
   if (!recipe.id) setTimeout(() => name.focus(), 0);

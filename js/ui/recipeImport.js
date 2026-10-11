@@ -1,12 +1,13 @@
 // Importing recipes (pasted from a website, or a file a friend shared) and sharing them.
 import { h, infoDialog, mount, showDialog, toast } from './dom.js';
-import { field, numberInput, readNumber } from './fields.js';
+import { field, numberInput, readNumber, selectInput } from './fields.js';
+import { cleanSource, creditLine, isFromSource, photoIsOwn, safeWebUrl } from '../core/source.js';
 import * as repo from '../data/repo.js';
 import { state } from './state.js';
 import { cleanDirections, cleanNotes, cleanPastedLine, parseIngredientList, parseRecipeText, UNITS } from '../core/ingredients.js';
 import { pickRecipePhoto } from './imagePick.js';
 import { gramsFor, per100g, rankCandidates, scaleTo, searchTerms } from '../core/foodMatch.js';
-import { buildRecipeFile, readRecipeFile, recipeFileName } from '../core/recipeShare.js';
+import { buildRecipeFile, readRecipeFile, recipeFileName, shareDefaults } from '../core/recipeShare.js';
 import { getFoods, searchFoods, UsdaError } from '../data/usda.js';
 import { roundTo } from '../core/units.js';
 import { fmt, inputNumber } from './format.js';
@@ -15,14 +16,40 @@ import { lookupsLeft } from './usageMeter.js';
 
 // ---- Sharing ----
 
+// Asks what to include first: for a recipe from someone else, their directions, notes and photo
+// are left out by default and the source link goes along instead.
 export async function shareRecipe(recipe) {
+  const include = await chooseWhatToShare(recipe);
+  if (!include) return;
   const customFields = await repo.listAll('customFields');
-  const blob = new Blob([JSON.stringify(buildRecipeFile(recipe, customFields), null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(buildRecipeFile(recipe, customFields, include), null, 2)], { type: 'application/json' });
   const result = await shareOrDownload(blob, recipeFileName(recipe.name), {
     title: recipe.name,
     text: `Recipe: ${recipe.name}. To add it, open Weight Tracker → Recipes → Import → Open a shared recipe file.`,
   });
   if (result === 'downloaded') toast('Recipe file downloaded — send it to your friend');
+}
+
+// Resolves { steps, photo } or undefined (cancelled).
+function chooseWhatToShare(recipe) {
+  const defaults = shareDefaults(recipe);
+  const fromSource = isFromSource(recipe);
+  const credit = creditLine(recipe.source);
+  const hasSteps = Boolean(recipe.instructions?.trim() || recipe.notes?.trim());
+  return showDialog((close) => {
+    const steps = h('input', { type: 'checkbox', checked: defaults.steps, disabled: !hasSteps });
+    const photo = h('input', { type: 'checkbox', checked: defaults.photo, disabled: !recipe.image });
+    return h('div', { class: 'dialog-body' },
+      h('h2', {}, 'Share recipe'),
+      h('p', {}, 'Always included: the name, ingredients, nutrition, meals and diets', fromSource ? ', plus the source link and credit.' : '.'),
+      fromSource && h('p', { class: 'notice' },
+        `This recipe is from ${credit || 'another source'}. Their directions, notes and photo are their own work, so they’re left out unless you have permission — your friend gets the link to see the original.`),
+      h('label', { class: 'check' }, steps, h('span', {}, hasSteps ? 'Directions and notes' : 'Directions and notes (none written)')),
+      h('label', { class: 'check' }, photo, h('span', {}, !recipe.image ? 'Photo (none added)' : photoIsOwn(recipe) ? 'Photo (yours)' : 'Photo (from the source)')),
+      h('div', { class: 'dialog-actions' },
+        h('button', { class: 'btn', type: 'button', onClick: () => close() }, 'Cancel'),
+        h('button', { class: 'btn btn-primary', type: 'button', onClick: () => close({ steps: steps.checked, photo: photo.checked }) }, 'Share')));
+  });
 }
 
 // ---- Import menu ----
@@ -100,16 +127,20 @@ function importFromText() {
     const ingredients = h('textarea', { rows: 8, placeholder: '2 cups white sugar\n1 ¾ cups all-purpose flour\n2 large eggs\n…' });
     const directions = h('textarea', { rows: 6, placeholder: '1. Preheat the oven to 350°F.\n2. Stir the dry ingredients together.\n…' });
     const notes = h('textarea', { rows: 3, placeholder: 'Tips, substitutions… (optional)' });
+    const sourceUrl = h('input', { type: 'text', inputmode: 'url', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: 'https://…', 'aria-label': 'Source link' });
+    const author = h('input', { type: 'text', placeholder: 'e.g. Kathryne Taylor', 'aria-label': 'Creator' });
     const errorLine = h('p', { class: 'errors' });
 
-    // Photo
+    // Photo, and whether it's the person's own or from the recipe's site.
     let image = null;
+    const photoFrom = selectInput([{ value: 'source', label: 'The recipe’s website' }, { value: 'own', label: 'Me — my own photo' }], 'source');
     const photoSlot = h('div', { class: 'photo-field' });
     const renderPhoto = () => mount(photoSlot,
       image && h('img', { class: 'photo-preview', src: image, alt: 'Recipe photo' }),
       h('div', { class: 'button-row tight' },
         h('button', { class: 'btn btn-small', type: 'button', onClick: async () => { const img = await pickRecipePhoto(); if (img) { image = img; renderPhoto(); } } }, image ? 'Change photo' : '+ Add photo'),
-        image && h('button', { class: 'link-btn', type: 'button', onClick: () => { image = null; renderPhoto(); } }, 'Remove')));
+        image && h('button', { class: 'link-btn', type: 'button', onClick: () => { image = null; renderPhoto(); } }, 'Remove')),
+      image && field('Photo is from', photoFrom));
     renderPhoto();
 
     // Whole-page shortcut: fills the boxes, which the person then checks.
@@ -118,6 +149,7 @@ function importFromText() {
     const fill = () => {
       const p = parseRecipeText(wholePage.value);
       if (p.name) title.value = p.name;
+      if (p.author && !author.value) author.value = p.author;
       if (p.yieldServings) servings.value = p.yieldServings;
       if (p.prepMinutes != null) prep.value = p.prepMinutes;
       if (p.cookMinutes != null) cook.value = p.cookMinutes;
@@ -139,8 +171,16 @@ function importFromText() {
         ingredients.focus();
         return;
       }
+      const url = sourceUrl.value.trim() ? safeWebUrl(sourceUrl.value) : null;
+      if (sourceUrl.value.trim() && !url) {
+        sourceUrl.classList.add('invalid');
+        errorLine.textContent = 'The source link should be a web address, like https://cookieandkate.com/…';
+        sourceUrl.focus();
+        return;
+      }
       const minutes = (input) => readNumber(input).value;
       reviewStep(body, {
+        source: cleanSource({ url, author: author.value, photo: image ? photoFrom.value : null }),
         name: cleanPastedLine(title.value),
         yieldServings: readNumber(servings).value,
         prepMinutes: minutes(prep),
@@ -155,6 +195,8 @@ function importFromText() {
     mount(body,
       h('h2', {}, 'Import a recipe'),
       h('p', { class: 'muted' }, 'Copy each part of the recipe from the website into its box. Only Ingredients is required.'),
+      h('p', { class: 'notice' },
+        'For your personal use. Recipes and photos belong to their creators — keep the source link, and when sharing, send the link rather than copies of other people’s photos and writing.'),
       field('Title', title),
       h('div', { class: 'input-row three' },
         field('Servings', servings),
@@ -163,6 +205,8 @@ function importFromText() {
       field('Ingredients', ingredients, 'One ingredient per line, with its amount. Section headings and links are ignored.'),
       field('Directions', directions, 'Optional. Ads and links pasted along with the steps are removed.'),
       field('Notes', notes),
+      field('Source link', sourceUrl, 'The web address of the original recipe, so you can always find it and credit it.'),
+      field('Creator', author, 'Who wrote the recipe, e.g. the blogger or chef.'),
       h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Photo'), photoSlot,
         h('small', { class: 'field-hint' }, 'Optional. Save the picture from the recipe page, or take your own, then choose it here.')),
       h('details', { class: 'whole-page' },
@@ -355,6 +399,7 @@ function reviewStep(body, parsed, close) {
       instructions: parsed.instructions,
       notes: parsed.notes,
       ...(parsed.image && { image: parsed.image }),
+      ...(parsed.source && { source: parsed.source }),
       ingredients,
     });
     close();

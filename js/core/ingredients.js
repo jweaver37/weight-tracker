@@ -232,6 +232,17 @@ export function cleanDirections(text) {
 
 export const cleanNotes = (text) => String(text ?? '').split(/\r?\n/).map(cleanPastedLine).filter(Boolean).join('\n');
 
+// The recipe's creator, from lines like "Author: Jane Doe", "Recipe by Jane Doe",
+// "Submitted by jdoe" or "Updated by Jane Doe on August 29, 2024".
+const AUTHOR_RE = /^(?:author|recipe by|recipe from|written by|submitted by|created by|updated by|posted by|by)\s*:?\s+(.+?)(?:\s+(?:on|updated)\s+[A-Z][a-z]+\.? \d{1,2},? \d{4}.*)?$/i;
+function findAuthor(lines) {
+  for (const raw of lines) {
+    const m = cleanPastedLine(raw.replace(BULLETS_RE, '')).match(AUTHOR_RE);
+    if (m && m[1].length <= 80 && !/\d{3,}|review|photo/i.test(m[1])) return m[1].trim();
+  }
+  return '';
+}
+
 // Splits pasted recipe text into its parts. Works with or without "Ingredients" / "Instructions" headings.
 export function parseRecipeText(text) {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !isSiteControl(l));
@@ -271,6 +282,7 @@ export function parseRecipeText(text) {
   const name = cleanPastedLine(headerLines.find((l) => !isMeta(l) && l.length <= 100) ?? '');
   return {
     name,
+    author: findAuthor(lines),
     yieldServings: servingsMatch ? Number(servingsMatch[1]) : null,
     prepMinutes: minutesFrom(all, 'prep(?:aration)?'),
     cookMinutes: minutesFrom(all, 'cook(?:ing)?'),
