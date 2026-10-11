@@ -2,7 +2,7 @@
 import { h } from './dom.js';
 import { parseAmount } from '../core/nutrition.js';
 import { cmToIn, inToCm, roundTo, weightFromDisplay, weightToDisplay } from '../core/units.js';
-import { fmt, inputNumber } from './format.js';
+import { fmt, inputNumber, unitFor } from './format.js';
 
 export const field = (label, control, hint) =>
   h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), control, hint && h('small', { class: 'field-hint' }, hint));
@@ -25,14 +25,18 @@ export function readNumber(input) {
 }
 
 // Preset choices plus "Custom…", which reveals a number box. read() → number, or null when invalid.
+// unit: a word ('weeks', 'lb') or a [singular, plural] pair (['day', 'days']), chosen by each number
+// so 1 reads "1 day" and others "7 days". "lb" becomes "lbs" except for exactly 1.
 export function presetPicker(presets, value, { unit = '', min, max } = {}) {
   const CUSTOM = '__custom';
+  const unitText = (n) => (Array.isArray(unit) ? unit[n === 1 ? 0 : 1] : unitFor(n, unit));
+  const plural = unitText(2);
   const match = presets.find((p) => Math.abs(p - value) < 1e-6);
-  const select = h('select', { 'aria-label': unit || 'Choice' },
-    presets.map((p) => h('option', { value: String(p), selected: p === match }, `${fmt(p, 2)} ${unit}`.trim())),
+  const select = h('select', { 'aria-label': plural || 'Choice' },
+    presets.map((p) => h('option', { value: String(p), selected: p === match }, `${fmt(p, 2)} ${unitText(p)}`.trim())),
     h('option', { value: CUSTOM, selected: match == null }, 'Custom…'));
-  const custom = numberInput(match == null ? inputNumber(value, 1) : '', { 'aria-label': `Custom ${unit}`.trim() });
-  const customWrap = h('div', { class: 'input-unit', hidden: match != null }, custom, unit && h('span', {}, unit));
+  const custom = numberInput(match == null ? inputNumber(value, 1) : '', { 'aria-label': `Custom ${plural}`.trim() });
+  const customWrap = h('div', { class: 'input-unit', hidden: match != null }, custom, plural && h('span', {}, plural));
   select.addEventListener('change', () => {
     customWrap.hidden = select.value !== CUSTOM;
     if (!customWrap.hidden) custom.focus();
@@ -50,7 +54,7 @@ export function presetPicker(presets, value, { unit = '', min, max } = {}) {
 // Weight input in the user's unit; read() returns kg (or null when blank/invalid).
 export function weightInput(kg, unit, attrs = {}) {
   const input = numberInput(kg == null ? '' : inputNumber(weightToDisplay(kg, unit), 1), attrs);
-  const el = h('div', { class: 'input-unit' }, input, h('span', {}, unit));
+  const el = h('div', { class: 'input-unit' }, input, h('span', {}, unitFor(2, unit)));
   return {
     el,
     input,

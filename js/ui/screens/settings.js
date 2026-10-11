@@ -276,12 +276,12 @@ function goalsSection(firstWeighIn) {
       optionsEl);
   };
 
-  const stepPresets = unit === 'kg' ? [1, 2, 5] : [2, 5, 10];
+  const stepPresets = unit === 'kg' ? [0.5, 1, 2, 5] : [1, 2, 5, 10];
   const step = presetPicker(stepPresets, roundTo(weightToDisplay(s.goals.weightLoss.stepKg, unit), 2), { unit, max: unit === 'kg' ? 50 : 100 });
-  const streakDays = presetPicker([7, 14, 30], s.goals.loggingStreak.days, { unit: 'days', min: 2, max: 365 });
-  const waterDays = presetPicker([3, 7, 14, 30], s.goals.waterStreak.days, { unit: 'days', min: 2, max: 365 });
+  const streakDays = presetPicker([7, 14, 30], s.goals.loggingStreak.days, { unit: ['day', 'days'], min: 2, max: 365 });
+  const waterDays = presetPicker([3, 7, 14, 30], s.goals.waterStreak.days, { unit: ['day', 'days'], min: 2, max: 365 });
   const perWeek = presetPicker([2, 3, 4, 5], s.goals.workoutsPerWeek.perWeek, { unit: 'a week', max: 14 });
-  const weeks = presetPicker([2, 4, 8], s.goals.workoutsPerWeek.weeks, { unit: 'weeks', max: 52 });
+  const weeks = presetPicker([2, 4, 8], s.goals.workoutsPerWeek.weeks, { unit: ['week', 'weeks'], max: 52 });
   const nutrientKeys = Object.keys(s.targets.values).filter((k) => nutrientByKey(k));
   const nutrient = selectInput(nutrientKeys.map((k) => ({ value: k, label: nutrientByKey(k).label })), s.goals.nutrition.nutrient);
   const nutritionDays = presetPicker([4, 5, 6, 7], s.goals.nutrition.days, { unit: 'of 7 days', max: 7 });

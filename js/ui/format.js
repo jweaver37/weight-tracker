@@ -7,8 +7,14 @@ export function fmt(value, decimals = 0) {
   return roundTo(value, decimals).toLocaleString(undefined, { maximumFractionDigits: decimals });
 }
 
-export const fmtWeight = (kg, unit, decimals = 1) =>
-  kg == null ? '–' : `${fmt(weightToDisplay(kg, unit), decimals)} ${unit}`;
+// "1 lb" but "0.5 lbs", "5 lbs". Other unit symbols (kg, g, ml, fl oz) never take an "s".
+export const unitFor = (value, unit) => (unit === 'lb' && value !== 1 ? 'lbs' : unit);
+
+export function fmtWeight(kg, unit, decimals = 1) {
+  if (kg == null) return '–';
+  const shown = roundTo(weightToDisplay(kg, unit), decimals);
+  return `${fmt(shown, decimals)} ${unitFor(Math.abs(shown), unit)}`;
+}
 
 export const fmtLength = (cm, unit, decimals = 1) =>
   cm == null ? '–' : `${fmt(lengthToDisplay(cm, unit), decimals)} ${unit}`;

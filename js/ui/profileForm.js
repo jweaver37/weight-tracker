@@ -7,7 +7,7 @@ import { lbToKg, roundTo } from '../core/units.js';
 import { todayStr } from '../core/dates.js';
 import { fmtDate, fmtWeight, inputNumber } from './format.js';
 
-const WEIGHT_UNITS = [{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }];
+const WEIGHT_UNITS = [{ value: 'lb', label: 'lbs' }, { value: 'kg', label: 'kg' }];
 const LENGTH_UNITS = [{ value: 'in', label: 'inches' }, { value: 'cm', label: 'cm' }];
 const VOLUME_UNITS = [{ value: 'floz', label: 'fl oz' }, { value: 'ml', label: 'ml' }];
 const SEXES = [{ value: '', label: 'Choose…' }, { value: 'female', label: 'Female' }, { value: 'male', label: 'Male' }];
