@@ -9,7 +9,7 @@ import { baselineMilestone, baselineProgress } from '../core/baseline.js';
 import { entryNutrients, waterMl } from '../core/nutrition.js';
 import { currentValue } from '../core/trends.js';
 import { nutrientByKey } from '../core/nutrients.js';
-import { fmt, fmtWeight } from './format.js';
+import { fmt, fmtDate, fmtWeight } from './format.js';
 import { weightPoints } from './targetsFlow.js';
 
 // History needed to measure the longest goals (a 30-day streak, several weeks of workouts).
@@ -117,7 +117,7 @@ export function describeMilestone(m) {
     case 'baseline':
       return {
         title: `Baseline Set: ${fmtWeight(m.weightKg, unit)}`,
-        body: `This is the average of your first ${m.weighIns} weigh-in${m.weighIns === 1 ? '' : 's'}. Your weight-loss milestones are measured from it, using your 7-day average weight.`,
+        body: `The average of ${m.weighIns} weigh-in${m.weighIns === 1 ? '' : 's'} starting ${fmtDate(m.startDate, { month: 'short', day: 'numeric', year: 'numeric' })}: the starting point for weight-loss milestones, measured with your 7-day average weight.`,
       };
     case 'weightLoss':
       return {

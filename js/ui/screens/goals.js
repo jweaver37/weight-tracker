@@ -9,7 +9,7 @@ import { fmt, fmtDate, fmtWeight } from '../format.js';
 import { ringChart } from '../ringChart.js';
 import { weightPoints } from '../targetsFlow.js';
 import { averageOver, currentValue } from '../../core/trends.js';
-import { BASELINE_WEIGH_INS, baselineProgress } from '../../core/baseline.js';
+import { BASELINE_WEIGH_INS, baselineProgress, fromEarlierBaseline } from '../../core/baseline.js';
 import { weightLossLevel } from '../../core/goals.js';
 import { describeMilestone, trophyBadge } from '../milestones.js';
 import { BASELINE_REMINDER } from '../baselineText.js';
@@ -38,7 +38,7 @@ export async function renderGoals(view) {
     ['day', 'week', 'month'].map((period) => periodCard(evaluatePeriod(s, period, data), today, s)),
     h('p', { class: 'muted center' },
       'Rings come from your targets and goals. ', h('a', { href: '#/settings' }, 'Change them in Settings'), '.'),
-    trophyRoom(trophies));
+    trophyRoom(trophies, s));
 }
 
 // Baseline and rolling 7-day average. Until the baseline is set, shows how it's coming along.
@@ -87,23 +87,39 @@ function weightCard(points, s, today) {
 const fact = (label, value, note) =>
   h('div', {}, h('dt', {}, label), h('dd', {}, h('strong', {}, value), note && h('small', { class: 'muted' }, note)));
 
-// Every milestone reached, newest first.
-function trophyRoom(trophies) {
+// Every milestone reached, newest first. Ones measured from an earlier baseline (before "Start a
+// New Baseline") are kept in their own, greyed group, to look back on and earn again.
+function trophyRoom(trophies, s) {
+  const longDate = (d) => fmtDate(d, { month: 'short', day: 'numeric', year: 'numeric' });
   const shown = trophies.filter((m) => m.acknowledgedAt)
     .sort((a, b) => (a.achievedOn === b.achievedOn ? (a.createdAt < b.createdAt ? 1 : -1) : a.achievedOn < b.achievedOn ? 1 : -1));
+  const earlier = shown.filter((m) => fromEarlierBaseline(m, s.baseline));
+  const current = shown.filter((m) => !earlier.includes(m));
+
+  const item = (m, old) => {
+    const { title, body } = describeMilestone(m);
+    const from = m.type === 'baseline' ? null : m.startKg;
+    return h('li', { class: old ? 'earlier' : '' },
+      trophyBadge(true),
+      h('div', {},
+        h('strong', {}, title),
+        h('small', { class: 'muted' }, longDate(m.achievedOn)),
+        old && h('span', { class: 'chip earlier-tag' },
+          from != null ? `Earlier Baseline · ${fmtWeight(from, s.units.weight)}` : 'Earlier Baseline'),
+        h('p', {}, body)));
+  };
+
   return h('section', { class: 'card' },
     h('div', { class: 'card-head' }, h('h2', {}, 'Trophy Room'), shown.length > 0 && h('span', { class: 'muted' }, String(shown.length))),
-    shown.length
-      ? h('ul', { class: 'trophy-list' }, shown.map((m) => {
-        const { title, body } = describeMilestone(m);
-        return h('li', {},
-          trophyBadge(true),
-          h('div', {},
-            h('strong', {}, title),
-            h('small', { class: 'muted' }, fmtDate(m.achievedOn, { month: 'short', day: 'numeric', year: 'numeric' })),
-            h('p', {}, body)));
-      }))
-      : h('p', { class: 'muted' }, 'Trophies you earn are kept here. Your first comes when your baseline is set.'));
+    current.length
+      ? h('ul', { class: 'trophy-list' }, current.map((m) => item(m, false)))
+      : h('p', { class: 'muted' }, earlier.length
+        ? 'Trophies you earn under your new baseline go here.'
+        : 'Trophies you earn are kept here. Your first comes when your baseline is set.'),
+    earlier.length > 0 && h('div', { class: 'trophy-earlier' },
+      h('h3', {}, 'From Earlier Baselines'),
+      h('p', { class: 'muted' }, 'What you achieved before starting over. Earn these again under your new baseline.'),
+      h('ul', { class: 'trophy-list' }, earlier.map((m) => item(m, true)))));
 }
 
 function dateNav(today, rerender) {

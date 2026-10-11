@@ -349,6 +349,13 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 6px 
 .trophy-list li { display: flex; gap: 12px; align-items: flex-start; }
 .trophy-list li > div { display: grid; min-width: 0; }
 .trophy-list p { margin: 2px 0 0; font-size: 0.9rem; }
+.trophy-earlier { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.trophy-earlier h3 { margin: 0 0 2px; font-size: 1rem; }
+.trophy-earlier > p { margin: 0 0 10px; font-size: 0.9rem; }
+.trophy-list li.earlier { background: var(--surface-2, rgba(127, 127, 127, 0.08)); border-radius: 12px; padding: 8px; }
+.trophy-list li.earlier .milestone-badge { filter: grayscale(1); opacity: 0.6; background: rgba(127, 127, 127, 0.15); }
+.trophy-list li.earlier strong { color: var(--muted); }
+.earlier-tag { justify-self: start; margin-top: 4px; font-size: 0.75rem; padding: 2px 8px; }
 
 /* Goal rings */
 .ring-red { --ring: var(--ring-red); }

@@ -256,11 +256,15 @@ function baselineControl(rerender) {
   const unit = s.units.weight;
   const restart = async () => {
     const ok = await confirmDialog(
-      'Your Baseline Set trophy will be removed. A new baseline is set from your next 7 weigh-ins, starting today, and the trophy is earned again then. ' +
-      'Weight-loss milestones will be measured from the new baseline; trophies you’ve already earned stay in your Trophy Room.',
+      'A new baseline is set from your next 7 weigh-ins, starting today, and you’ll earn a new Baseline Set trophy then. ' +
+      'Weight-loss milestones will be measured from the new baseline, so you can earn them again. ' +
+      'Your current baseline and weight trophies stay in your Trophy Room under “From Earlier Baselines”.',
       { title: 'Start a new baseline?', okLabel: 'Start New Baseline', danger: true });
     if (!ok) return;
-    for (const m of await repo.listAll('milestones')) if (m.type === 'baseline') await repo.remove('milestones', m.id);
+    // Keep the old Baseline Set trophy under its own key so a new one can be earned.
+    for (const m of await repo.listAll('milestones')) {
+      if (m.key === 'baseline') await repo.save('milestones', { ...m, key: `baseline:${m.startDate}` });
+    }
     await saveSettings({ ...state.settings, baseline: null, baselineFrom: todayStr() });
     toast('New baseline started');
     rerender();

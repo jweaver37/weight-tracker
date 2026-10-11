@@ -32,6 +32,17 @@ export function baselineProgress(points, today, from = null) {
   };
 }
 
+// Trophies measured from a baseline (the baseline itself, weight loss; later body measurements)
+// belong to it, by its startDate. Others (streaks, workouts) don't depend on one.
+// Weight-loss trophies from before baselines existed have no baselineStart and count as earlier.
+const BASELINE_TYPES = new Set(['baseline', 'weightLoss']);
+
+export function fromEarlierBaseline(m, baseline) {
+  if (!BASELINE_TYPES.has(m.type)) return false;
+  const start = m.type === 'baseline' ? m.startDate : m.baselineStart;
+  return !baseline || start !== baseline.startDate;
+}
+
 // The milestone that records the baseline (shown once, kept in the Trophy Room).
 export const baselineMilestone = (b) => ({
   key: 'baseline',
