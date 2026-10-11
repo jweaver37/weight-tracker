@@ -1,5 +1,5 @@
 // Shows how much of the USDA lookup limit this device has used.
-import { h } from './dom.js';
+import { barFill, h } from './dom.js';
 import { currentUsage } from '../data/usdaUsage.js';
 import { fmt } from './format.js';
 
@@ -16,7 +16,7 @@ export function usageMeter(apiKey) {
           h('span', {}, `Lookups in the last ${l.label}`),
           h('span', { class: 'muted' }, `${fmt(l.used)} of ${fmt(l.max)}`)),
         h('div', { class: `bar ${tone}`, role: 'progressbar', 'aria-label': `USDA lookups in the last ${l.label}`, 'aria-valuenow': l.used, 'aria-valuemin': 0, 'aria-valuemax': l.max },
-          h('div', { class: 'bar-fill', style: `width:${pct}%` })),
+          barFill(pct)),
         l.remaining === 0 && l.freesAt && h('small', { class: 'warn-text' }, `Limit reached. Lookups free up again from ${time(l.freesAt)}.`));
     }),
     limitHitAt && h('small', { class: 'warn-text' }, `USDA reported the limit was reached at ${time(limitHitAt)}. Lookups resume within the hour.`),

@@ -1,6 +1,8 @@
 # Weight Tracker
 
-A phone-first web app for logging food, weight and workouts. See `Weight Loss Tracker App - Project Spec.pdf` for the full plan.
+A phone-first web app for logging food, weight, body measurements and workouts.
+
+**Live app:** https://jweaver37.github.io/weight-tracker/
 
 ## Running it
 
@@ -11,6 +13,8 @@ Plain HTML, CSS and JavaScript — no build step, no npm.
 3. Edit and save; the page reloads.
 
 Opening `index.html` directly from disk does not work, because browsers block JavaScript modules on `file://` pages.
+
+A Content Security Policy in `index.html` only allows the app's own files and the USDA API. It also blocks Live Server's injected auto-reload script, so refresh the page by hand after saving. Bump `CACHE` in `sw.js` with each change so installed copies pick it up.
 
 Phones need an `https` address (GitHub Pages). On iPhone, use **Share → Add to Home Screen** so Safari keeps the app's data.
 

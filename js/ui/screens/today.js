@@ -1,5 +1,5 @@
 // Today: the day's food log by meal, with calorie and nutrient totals against targets.
-import { h, mount, showDialog } from '../dom.js';
+import { barFill, h, mount, showDialog } from '../dom.js';
 import { state } from '../state.js';
 import * as repo from '../../data/repo.js';
 import { addDays, todayStr } from '../../core/dates.js';
@@ -148,7 +148,7 @@ function progressBar(value, target, kind) {
   const over = value > target;
   const tone = kind === 'min' ? (value >= target ? 'good' : '') : over ? 'warn' : '';
   return h('div', { class: `bar ${tone}`, role: 'progressbar', 'aria-valuenow': Math.round(pct), 'aria-valuemin': 0, 'aria-valuemax': 100 },
-    h('div', { class: 'bar-fill', style: `width:${pct}%` }));
+    barFill(pct));
 }
 
 function nutrientCard(totals, s, customFields, water) {

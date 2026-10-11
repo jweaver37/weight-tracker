@@ -35,6 +35,14 @@ function appendChildren(el, children) {
   }
 }
 
+// The filled part of a progress bar. Width is set through el.style, not a style="" attribute,
+// which the Content Security Policy blocks.
+export function barFill(pct) {
+  const el = h('div', { class: 'bar-fill' });
+  el.style.width = `${pct}%`;
+  return el;
+}
+
 // Builds an SVG element (namespaced). Attributes are set as-is.
 export function svg(tag, attrs = {}, ...children) {
   const el = document.createElementNS('http://www.w3.org/2000/svg', tag);

@@ -2,5 +2,8 @@
 .claude/
 .vscode/
 
+# The project spec has personal details; it stays on the developer's PC
+*.pdf
+
 # Backups exported from the app contain personal data
 weight-tracker-backup-*.json
