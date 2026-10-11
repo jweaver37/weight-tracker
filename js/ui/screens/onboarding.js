@@ -46,7 +46,7 @@ function renderSetup(view, onDone) {
     const { units, profile: p, currentWeightKg } = profile.read();
     const { targets: t, errors } = targets.read();
     if (!currentWeightKg) errors.unshift('Enter your current weight.');
-    if (t.mode === 'calculated' && !canCalculate(p)) errors.unshift('Calculated targets need your sex, birth date and height.');
+    if (t.mode === 'calculated' && !canCalculate(p)) errors.unshift('Calculated targets need your sex, age and height.');
     if (errors.length) {
       errorBox.replaceChildren(...errors.map((e) => h('p', {}, e)));
       errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });

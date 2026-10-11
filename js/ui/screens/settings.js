@@ -55,7 +55,7 @@ function profileSection(rerender, breakdown) {
     ev.preventDefault();
     const { units, profile: p } = profile.read();
     const { targets: t, errors } = targets.read();
-    if (t.mode === 'calculated' && !canCalculate(p)) errors.unshift('Calculated targets need your sex, birth date and height.');
+    if (t.mode === 'calculated' && !canCalculate(p)) errors.unshift('Calculated targets need your sex, age and height.');
     if (errors.length) {
       errorBox.replaceChildren(...errors.map((e) => h('p', {}, e)));
       return;
@@ -88,7 +88,7 @@ function profileSection(rerender, breakdown) {
 // How the calorie target is reached: BMR × activity = maintenance, minus the weight-loss deficit.
 function calorieBreakdown(s, b) {
   if (!b) {
-    return h('p', { class: 'notice' }, 'Add your sex, birth date and height below (and a weigh-in) to see your BMR — the calories your body burns at rest — and how your calorie target is worked out.');
+    return h('p', { class: 'notice' }, 'Add your sex, age and height below (and a weigh-in) to see your BMR — the calories your body burns at rest — and how your calorie target is worked out.');
   }
   const kcal = (v) => `${fmt(v)} kcal`;
   const step = (label, value, note, cls = '') => h('li', { class: cls },

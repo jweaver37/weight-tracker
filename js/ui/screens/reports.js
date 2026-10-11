@@ -5,7 +5,7 @@ import * as repo from '../../data/repo.js';
 import { addDays, daysBetween, minDate, monthEnd, monthStart, todayStr } from '../../core/dates.js';
 import { buildReport, DAILY_TABLE_MAX_DAYS, REPORT_NUTRIENTS } from '../../core/report.js';
 import { rollingAverage } from '../../core/trends.js';
-import { ageOn, ACTIVITY_LEVELS } from '../../core/targets.js';
+import { ACTIVITY_LEVELS, profileAge } from '../../core/targets.js';
 import { MEALS } from '../../core/nutrition.js';
 import { nutrientByKey } from '../../core/nutrients.js';
 import { volumeLabel, volumeToDisplay, weightToDisplay } from '../../core/units.js';
@@ -174,7 +174,7 @@ function profileBlock(s, breakdown) {
   const p = s.profile;
   const today = todayStr();
   const facts = [
-    ['Age', p.birthDate ? `${ageOn(p.birthDate, today)}` : '–'],
+    ['Age', profileAge(p, today) ?? '–'],
     ['Sex', p.sex ? p.sex[0].toUpperCase() + p.sex.slice(1) : '–'],
     ['Height', p.heightCm ? fmtHeight(p.heightCm, s.units.length) : '–'],
     ['Goal weight', fmtWeight(p.goalWeightKg, s.units.weight)],

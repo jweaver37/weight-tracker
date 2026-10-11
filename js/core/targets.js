@@ -78,7 +78,22 @@ export function calculateTargets({ sex, age, heightCm, weightKg, goalWeightKg, a
   };
 }
 
-export const canCalculate = (profile) => Boolean(profile.sex && profile.birthDate && profile.heightCm);
+// Age can come from a full birth date, a birth month and year, or just an age. The calorie formula
+// uses whole years (each year changes BMR by ~5 kcal), so the day isn't needed.
+// profile.birthMode: 'date' (birthDate 'YYYY-MM-DD'), 'month' (birthMonth 'YYYY-MM'), or
+// 'age' (age, ageAsOf 'YYYY-MM-DD' — counted on a year each year after it was entered).
+export function profileAge(profile, today) {
+  const mode = profile.birthMode ?? (profile.birthDate ? 'date' : profile.birthMonth ? 'month' : 'age');
+  if (mode === 'date' && profile.birthDate) return ageOn(profile.birthDate, today);
+  // Birthday assumed on the 1st of the month, so the age is never more than a month behind.
+  if (mode === 'month' && /^\d{4}-\d{2}$/.test(profile.birthMonth ?? '')) return ageOn(`${profile.birthMonth}-01`, today);
+  if (mode === 'age' && Number.isFinite(profile.age) && profile.ageAsOf) {
+    return profile.age + Math.max(0, ageOn(profile.ageAsOf, today));
+  }
+  return null;
+}
+
+export const canCalculate = (profile) => Boolean(profile.sex && profile.heightCm && profileAge(profile, new Date().toISOString().slice(0, 10)) != null);
 
 export function calculateFromSettings(settings, weightKg, today) {
   const p = settings.profile;
@@ -86,7 +101,7 @@ export function calculateFromSettings(settings, weightKg, today) {
   if (!canCalculate(p) || !weightKg) return null;
   return calculateTargets({
     sex: p.sex,
-    age: ageOn(p.birthDate, today),
+    age: profileAge(p, today),
     heightCm: p.heightCm,
     weightKg,
     goalWeightKg: p.goalWeightKg,

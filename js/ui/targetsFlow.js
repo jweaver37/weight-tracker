@@ -30,7 +30,7 @@ export async function recalculateTargets(weightKg) {
 }
 
 // The BMR → maintenance → target steps behind the calorie target, or null when the profile lacks
-// sex, birth date or height (or there is no weight yet). Calculated targets use the weight they were
+// sex, age or height (or there is no weight yet). Calculated targets use the weight they were
 // last calculated from, so the steps add up to the target shown; manual targets use current weight.
 export async function energyBreakdown() {
   const s = state.settings;

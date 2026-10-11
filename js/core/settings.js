@@ -7,7 +7,8 @@ export function defaultSettings() {
   return {
     units: { weight: 'lb', length: 'in', volume: 'floz' },
     water: { targetMl: 64 * ML_PER_FLOZ },
-    profile: { name: '', sex: null, birthDate: null, heightCm: null, activity: 'light', goalWeightKg: null },
+    // Age: new profiles start on "just my age" (least personal); see profileAge().
+    profile: { name: '', sex: null, birthMode: 'age', birthDate: null, birthMonth: null, age: null, ageAsOf: null, heightCm: null, activity: 'light', goalWeightKg: null },
     targets: {
       mode: 'calculated', // 'calculated' | 'manual'
       values: {},
@@ -43,7 +44,8 @@ export function withDefaults(saved) {
     rings: { ...d.rings, ...saved.rings },
     usda: { ...d.usda, ...saved.usda },
     diet: { ...d.diet, ...saved.diet },
-    profile: { ...d.profile, ...saved.profile },
+    // Profiles saved before the age options have a birth date and no mode: keep using the date.
+    profile: { ...d.profile, ...(saved.profile?.birthDate && !saved.profile.birthMode && { birthMode: 'date' }), ...saved.profile },
     targets: { ...d.targets, ...saved.targets },
     goals: Object.fromEntries(Object.entries(d.goals).map(([k, v]) => [k, { ...v, ...saved.goals?.[k] }])),
   };

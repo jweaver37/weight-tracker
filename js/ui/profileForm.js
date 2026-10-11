@@ -1,16 +1,68 @@
 // Profile and targets forms, shared by first-time setup and Settings.
 import { h } from './dom.js';
 import { field, heightInput, numberInput, readNumber, selectInput, weightInput } from './fields.js';
-import { ACTIVITY_LEVELS, CALCULATED_KEYS, DEFAULT_MIN_CALORIES, LOSS_RATES_LB } from '../core/targets.js';
+import { ACTIVITY_LEVELS, CALCULATED_KEYS, DEFAULT_MIN_CALORIES, LOSS_RATES_LB, profileAge } from '../core/targets.js';
 import { nutrientByKey } from '../core/nutrients.js';
 import { lbToKg, roundTo } from '../core/units.js';
 import { todayStr } from '../core/dates.js';
-import { fmtWeight, inputNumber } from './format.js';
+import { fmtDate, fmtWeight, inputNumber } from './format.js';
 
 const WEIGHT_UNITS = [{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }];
 const LENGTH_UNITS = [{ value: 'in', label: 'inches' }, { value: 'cm', label: 'cm' }];
 const VOLUME_UNITS = [{ value: 'floz', label: 'fl oz' }, { value: 'ml', label: 'ml' }];
 const SEXES = [{ value: '', label: 'Choose…' }, { value: 'female', label: 'Female' }, { value: 'male', label: 'Male' }];
+
+const AGE_MODES = [
+  { value: 'age', label: 'Just my age' },
+  { value: 'month', label: 'Birth month & year' },
+  { value: 'date', label: 'Full birth date' },
+];
+
+// Age as just a number, a birth month & year, or a full birth date. Only the chosen one is kept:
+// switching to a less detailed option removes the more detailed one from the device.
+function ageField(p) {
+  const today = todayStr();
+  const known = profileAge(p, today);
+  const mode = selectInput(AGE_MODES, p.birthMode ?? (p.birthDate ? 'date' : 'age'), { 'aria-label': 'How to enter your age' });
+  const ageInput = numberInput(known ?? '', { inputmode: 'numeric', placeholder: 'e.g. 47', 'aria-label': 'Age in years' });
+  const month = h('input', { type: 'month', value: p.birthMonth ?? (p.birthDate ? p.birthDate.slice(0, 7) : ''), max: today.slice(0, 7), placeholder: 'YYYY-MM', 'aria-label': 'Birth month and year' });
+  const date = h('input', { type: 'date', value: p.birthDate ?? '', max: today, 'aria-label': 'Birth date' });
+  const ageRow = h('div', { class: 'input-unit' }, ageInput, h('span', {}, 'years'));
+  // Explains that the age keeps itself up to date, from the day it was entered.
+  const asOf = p.birthMode === 'age' && p.ageAsOf ? p.ageAsOf : today;
+  const ageNote = h('small', { class: 'field-hint' },
+    `The app remembers that you entered this on ${fmtDate(asOf, { month: 'long', day: 'numeric', year: 'numeric' })} and adds a year every year after that, so you don’t need to update it. If you change the number, it counts from the day you change it.`);
+  const sync = () => {
+    ageRow.hidden = mode.value !== 'age';
+    ageNote.hidden = mode.value !== 'age';
+    month.hidden = mode.value !== 'month';
+    date.hidden = mode.value !== 'date';
+  };
+  mode.addEventListener('change', () => {
+    // Carry the age over so switching doesn't lose it.
+    if (mode.value === 'age' && !ageInput.value) ageInput.value = known ?? '';
+    sync();
+  });
+  sync();
+  return {
+    el: h('div', { class: 'form-grid' }, mode, ageRow, ageNote, month, date),
+    read: () => {
+      if (mode.value === 'age') {
+        const { value } = readNumber(ageInput);
+        const years = value != null && value >= 13 && value <= 120 ? Math.round(value) : null;
+        ageInput.classList.toggle('invalid', ageInput.value.trim() !== '' && years == null);
+        // Keep the original "as of" date while the age hasn't been changed, so it keeps counting up.
+        const unchanged = years != null && years === known && p.birthMode === 'age' && p.ageAsOf;
+        return { birthMode: 'age', age: years, ageAsOf: years == null ? null : unchanged ? p.ageAsOf : today, birthMonth: null, birthDate: null };
+      }
+      if (mode.value === 'month') {
+        const ok = /^\d{4}-\d{2}$/.test(month.value);
+        return { birthMode: 'month', birthMonth: ok ? month.value : null, age: null, ageAsOf: null, birthDate: null };
+      }
+      return { birthMode: 'date', birthDate: date.value || null, birthMonth: null, age: null, ageAsOf: null };
+    },
+  };
+}
 
 // read() → { units, profile, currentWeightKg }
 export function profileForm(settings, { currentWeightKg, askCurrentWeight = false } = {}) {
@@ -20,8 +72,8 @@ export function profileForm(settings, { currentWeightKg, askCurrentWeight = fals
   const lengthUnit = selectInput(LENGTH_UNITS, settings.units.length);
   const volumeUnit = selectInput(VOLUME_UNITS, settings.units.volume);
   const sex = selectInput(SEXES, p.sex ?? '');
-  const birthDate = h('input', { type: 'date', value: p.birthDate ?? '', max: todayStr() });
-  const activity = selectInput(ACTIVITY_LEVELS.map((a) => ({ value: a.key, label: a.label })), p.activity);
+  const age = ageField(p);
+  const activity =selectInput(ACTIVITY_LEVELS.map((a) => ({ value: a.key, label: a.label })), p.activity);
 
   let height = heightInput(p.heightCm, settings.units.length);
   let goal = weightInput(p.goalWeightKg, settings.units.weight);
@@ -48,7 +100,7 @@ export function profileForm(settings, { currentWeightKg, askCurrentWeight = fals
     field('Name', name),
     h('div', { class: 'input-row' }, field('Weight', weightUnit), field('Height & body', lengthUnit), field('Drinks', volumeUnit)),
     field('Sex', sex, 'Used by the calorie formula.'),
-    field('Birth date', birthDate),
+    field('Age', age.el, 'Used by the calorie formula, in whole years. Share only what you’re comfortable with — it stays on this device.'),
     field('Height', heightSlot),
     current && field('Current weight', currentSlot),
     field('Goal weight', goalSlot),
@@ -64,7 +116,7 @@ export function profileForm(settings, { currentWeightKg, askCurrentWeight = fals
         ...p,
         name: name.value.trim(),
         sex: sex.value || null,
-        birthDate: birthDate.value || null,
+        ...age.read(),
         heightCm: height.read(),
         goalWeightKg: goal.read(),
         activity: activity.value,
