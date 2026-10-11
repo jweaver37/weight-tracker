@@ -7,6 +7,7 @@ import { parseIngredientLine } from '../core/ingredients.js';
 import { findSubstitutes, swapLine, SWAP_TAGS, tagForFollowedDiet, tagsIn } from '../core/substitutes.js';
 import { UsdaError } from '../data/usda.js';
 import { lookUpIngredient } from './ingredientLookup.js';
+import { classifyOil } from '../core/seedOils.js';
 
 export const hasSubstitutes = (ingredient) => Boolean(findSubstitutes(ingredient.name));
 
@@ -17,7 +18,9 @@ const fitsTag = (s, tag) => s.tags.includes(tag) || (tag === 'vegetarian' && s.t
 export function openSubstitutes(ingredient) {
   const group = findSubstitutes(ingredient.name);
   if (!group) return Promise.resolve(undefined);
-  const followed = tagForFollowedDiet(state.settings.diet?.follow);
+  // Start on the person's preference: seed-oil free when swapping an oil they avoid, else their diet.
+  const avoidingThisOil = state.settings.diet?.avoidSeedOils && ['seed', 'check'].includes(classifyOil(ingredient).kind);
+  const followed = avoidingThisOil ? 'seed-oil-free' : tagForFollowedDiet(state.settings.diet?.follow);
   let tag = followed && group.subs.some((s) => fitsTag(s, followed)) ? followed : null;
 
   return showDialog((close) => {

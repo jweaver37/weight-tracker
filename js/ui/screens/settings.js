@@ -170,12 +170,24 @@ function dietSection(rerender) {
     });
   }
 
+  // Separate from the diet choice: someone can be vegan and also avoid seed oils.
+  const avoid = h('input', { type: 'checkbox', checked: Boolean(d.avoidSeedOils) });
+  avoid.addEventListener('change', async () => {
+    await saveSettings({ ...state.settings, diet: { ...state.settings.diet, avoidSeedOils: avoid.checked } });
+    toast(avoid.checked ? 'Recipes with seed oils will be highlighted' : 'Seed-oil highlighting off');
+  });
+
   return h('section', { class: 'card form-grid' },
     h('h2', {}, 'Your diet'),
     h('p', { class: 'muted' }, 'Choose a diet if you follow one. Not following one? Leave it on Any / None.'),
     field('I follow', follow, chosen?.note),
     meatFree && field('Meat-free days goal', meatFree.el,
-      'A “Meat-free days” ring appears in this week’s circle on the Goals tab. A day counts when you logged food and none of it contained meat, poultry or fish.'));
+      'A “Meat-free days” ring appears in this week’s circle on the Goals tab. A day counts when you logged food and none of it contained meat, poultry or fish.'),
+    h('label', { class: 'choice' }, avoid,
+      h('span', {}, h('strong', {}, 'I avoid seed oils'),
+        h('small', {}, 'Recipes using canola, corn, cottonseed, soybean, sunflower, safflower, grapeseed, rice bran or “vegetable” oil are highlighted with a prompt to swap the oil, and swaps start on Seed-Oil Free. Peanut, sesame and cold-pressed seed oils (flax, hemp, pumpkin) count as “Other Oil”.'))),
+    h('small', { class: 'muted' },
+      '“Seed oil” isn’t an official category, and major health organizations such as the American Heart Association consider these oils a source of healthy unsaturated fats. This is shown as information to match your preference, not a health claim.'));
 }
 
 function foodDatabaseSection(rerender) {

@@ -18,12 +18,13 @@ import { ingredientList, logRecipe, recipeDisplayName, swapHandlers } from '../r
 import { openImport, shareRecipe } from '../recipeImport.js';
 import { pickRecipePhoto } from '../imagePick.js';
 import { cleanSource, photoIsOwn, safeWebUrl, siteName } from '../../core/source.js';
+import { firstSeedOilIndex, recipeSeedOil, SEED_OIL_STATUSES } from '../../core/seedOils.js';
 
 // ---- The list: search, sort and filter ----
 
 // Sort and filters are remembered on this device (a convenience; losing them is harmless).
 const PREFS_KEY = 'recipeListPrefs';
-const DEFAULT_PREFS = { sort: 'name', direction: 'asc', diet: null, meals: [], nutrients: [], fitsToday: false };
+const DEFAULT_PREFS = { sort: 'name', direction: 'asc', diet: null, seedOil: null, meals: [], nutrients: [], fitsToday: false };
 
 function loadPrefs() {
   try {
@@ -51,7 +52,10 @@ async function caloriesLeftToday() {
 export async function renderRecipes(view, id) {
   if (id) return renderEditor(view, id);
   const [recipes, caloriesLeft] = await Promise.all([repo.listAll('recipes'), caloriesLeftToday()]);
-  const items = recipes.map((recipe) => ({ recipe, per: perServing(recipe.ingredients, recipe.yieldServings), diets: recipeDiets(recipe) }));
+  const items = recipes.map((recipe) => ({
+    recipe, per: perServing(recipe.ingredients, recipe.yieldServings), diets: recipeDiets(recipe), oil: recipeSeedOil(recipe),
+  }));
+  const avoidSeedOils = Boolean(state.settings.diet?.avoidSeedOils);
   const prefs = loadPrefs();
   let query = '';
 
@@ -103,11 +107,16 @@ export async function renderRecipes(view, id) {
       DIETS.map((d) => h('option', { value: d.key, selected: d.key === prefs.diet }, d.label)));
     dietSelect.addEventListener('change', () => { prefs.diet = dietSelect.value || null; update(); });
 
-    const filtersOn = prefs.diet || prefs.meals.length || prefs.nutrients.length || prefs.fitsToday;
+    const oilSelect = h('select', { 'aria-label': 'Seed oils' },
+      h('option', { value: '', selected: !prefs.seedOil }, 'Any'),
+      [['non', 'Non Seed Oil'], ['other', 'Other Oil'], ['seed', 'Seed Oil']].map(([k, label]) => h('option', { value: k, selected: prefs.seedOil === k }, label)));
+    oilSelect.addEventListener('change', () => { prefs.seedOil = oilSelect.value || null; update(); });
+
+    const filtersOn = prefs.diet || prefs.seedOil || prefs.meals.length || prefs.nutrients.length || prefs.fitsToday;
     mount(controls,
       search,
       h('div', { class: 'input-row align-center' }, field('Sort by', sort), direction),
-      field('Diet', dietSelect),
+      h('div', { class: 'input-row' }, field('Diet', dietSelect), field('Seed oils', oilSelect)),
       h('div', { class: 'chip-row', role: 'group', 'aria-label': 'Meal' },
         MEALS.map((m) => toggle(m.label, prefs.meals.includes(m.key), () => { prefs.meals = flip(prefs.meals, m.key); update(); })),
         caloriesLeft != null && toggle(`Fits today (${fmt(Math.max(0, caloriesLeft))} kcal left)`, prefs.fitsToday, () => { prefs.fitsToday = !prefs.fitsToday; update(); })),
@@ -118,13 +127,14 @@ export async function renderRecipes(view, id) {
       })),
       h('div', { class: 'button-row tight' },
         h('button', { class: 'link-btn', type: 'button', onClick: async () => { const f = await askNutrientFilter(); if (f) { prefs.nutrients = [...prefs.nutrients, f]; update(); } } }, '+ Nutrient filter'),
-        filtersOn && h('button', { class: 'link-btn', type: 'button', onClick: () => { Object.assign(prefs, { diet: null, meals: [], nutrients: [], fitsToday: false }); update(); } }, 'Clear filters')));
+        filtersOn && h('button', { class: 'link-btn', type: 'button', onClick: () => { Object.assign(prefs, { diet: null, seedOil: null, meals: [], nutrients: [], fitsToday: false }); update(); } }, 'Clear filters')));
   }
 
   function renderResults() {
     const shown = sortRecipes(filterRecipes(items, {
       query,
       diet: prefs.diet,
+      seedOil: prefs.seedOil,
       meals: prefs.meals,
       nutrients: prefs.nutrients,
       maxCalories: prefs.fitsToday ? caloriesLeft : null,
@@ -135,14 +145,18 @@ export async function renderRecipes(view, id) {
     mount(results,
       h('p', { class: 'muted result-count' }, shown.length === items.length ? `${items.length} recipe${items.length === 1 ? '' : 's'}` : `Showing ${shown.length} of ${items.length} recipes`),
       shown.length
-        ? h('ul', { class: 'entry-list' }, shown.map(({ recipe: r, per, diets }) => {
+        ? h('ul', { class: 'entry-list' }, shown.map(({ recipe: r, per, diets, oil }) => {
           // With a diet filter on, the badge shows that diet (with "?" if it needs checking).
           const filtered = prefs.diet && dietByKey(prefs.diet);
           const badge = filtered
             ? `${filtered.short ?? filtered.label}${diets[prefs.diet].status === 'check' ? '?' : ''}`
             : dietBadge(diets)?.label;
+          // Seed-oil badge: shown for seed / unsure oils always, and for every status when filtering by oil.
+          const oilBadge = (oil.status === 'seed' || oil.status === 'check' || prefs.seedOil) ? SEED_OIL_STATUSES[oil.status].short : null;
+          // People avoiding seed oils still see these recipes, highlighted, with a prompt to swap the oil.
+          const needsSwap = avoidSeedOils && oil.status === 'seed';
           const value = per.nutrients[shownKey];
-          return h('li', {},
+          return h('li', { class: needsSwap ? 'needs-swap' : '' },
             h('a', { class: 'entry', href: `#/recipes/${r.id}` },
               r.image
                 ? h('img', { class: 'recipe-thumb', src: r.image, alt: '', loading: 'lazy' })
@@ -152,6 +166,7 @@ export async function renderRecipes(view, id) {
                 h('span', { class: 'entry-name' }, recipeDisplayName(r)),
                 h('small', { class: 'muted' },
                   badge && h('span', { class: `diet-badge ${badge.endsWith('?') ? 'unsure' : 'sure'}` }, badge),
+                  oilBadge && h('span', { class: `diet-badge oil-${oil.status}` }, needsSwap ? 'Seed Oil · swap to fit' : oilBadge),
                   [mealLabels(r), `Makes ${fmt(r.yieldServings, 2)}`].filter(Boolean).join(' · '))),
               h('span', { class: 'entry-kcal' },
                 value == null ? '–' : shownKey === 'calories' ? `${fmt(value)} kcal` : `${fmtAmount(value, shownNutrient.unit)}`,
@@ -332,7 +347,22 @@ async function renderEditor(view, id) {
     renderDiet();
     persistSoon();
   };
-  const renderDiet = () => mount(dietSlot, dietList(recipe, cycleDiet));
+  // Seed oils: tapping cycles Auto → Seed Oil → Other Oil → Non Seed Oil → Auto.
+  const cycleOil = () => {
+    const order = [undefined, 'seed', 'other', 'non'];
+    const next = order[(order.indexOf(recipe.seedOilOverride) + 1) % order.length];
+    if (next) recipe.seedOilOverride = next; else delete recipe.seedOilOverride;
+    renderDiet();
+    persistSoon();
+  };
+  const swapTheOil = () => {
+    const i = firstSeedOilIndex(recipe);
+    if (i >= 0) swaps.onSwap(i);
+  };
+  const renderDiet = () => mount(dietSlot,
+    seedOilNotice(recipe, swapTheOil),
+    dietList(recipe, cycleDiet),
+    seedOilRow(recipe, cycleOil));
   renderDiet();
 
   const ingredientsSlot = h('div', {});
@@ -426,6 +456,41 @@ async function renderEditor(view, id) {
     h('div', { class: 'button-row' }, logBtn, shareBtn, deleteBtn));
 
   if (!recipe.id) setTimeout(() => name.focus(), 0);
+}
+
+// For people avoiding seed oils: which oil to swap, with a button that opens the swap list.
+function seedOilNotice(recipe, onSwap) {
+  if (!state.settings.diet?.avoidSeedOils) return null;
+  const oil = recipeSeedOil(recipe);
+  if (oil.status !== 'seed') return null;
+  const names = oil.found.seed.length ? oil.found.seed.join(', ') : 'a seed oil';
+  return h('div', { class: 'notice seed-oil-notice' },
+    h('p', {}, h('strong', {}, 'Contains seed oil: '), `${names}. Swap the oil to fit your seed-oil preference.`),
+    oil.found.seed.length > 0 && h('button', { class: 'btn btn-small btn-primary', type: 'button', onClick: onSwap }, '⇄ Swap the oil'));
+}
+
+const OIL_ICONS = { seed: { icon: '✗', cls: 'no' }, check: { icon: '?', cls: 'check' }, other: { icon: '•', cls: 'other' }, non: { icon: '✓', cls: 'fits' } };
+
+function seedOilRow(recipe, onCycle) {
+  if (!recipe.ingredients?.length) return null;
+  const oil = recipeSeedOil(recipe);
+  const s = OIL_ICONS[oil.status];
+  const reason = oil.source === 'set'
+    ? `Set by you · detected: ${SEED_OIL_STATUSES[oil.detected].label}`
+    : [
+      oil.found.seed.length && `Contains ${oil.found.seed.join(', ')}`,
+      ...oil.found.check.map((c) => `${c.name}: ${c.why}`),
+      oil.found.other.length && `Contains ${oil.found.other.join(', ')} (counted as other oils)`,
+    ].filter(Boolean).join(' · ') || 'No seed oils found';
+  return h('ul', { class: 'diet-list' }, h('li', {},
+    h('button', {
+      class: `diet-row ${s.cls}`, type: 'button',
+      'aria-label': `Seed oils: ${SEED_OIL_STATUSES[oil.status].label}${oil.source === 'set' ? ', set by you' : ''}. Tap to change.`,
+      onClick: onCycle,
+    },
+    h('span', { class: 'diet-icon', 'aria-hidden': 'true' }, s.icon),
+    h('span', { class: 'diet-main' }, h('strong', {}, `Seed oils: ${SEED_OIL_STATUSES[oil.status].label}`), h('small', { class: 'muted' }, reason)),
+    h('span', { class: `diet-source ${oil.source}` }, oil.source === 'set' ? 'Yours' : 'Auto'))));
 }
 
 const STATUS = {

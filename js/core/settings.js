@@ -22,7 +22,8 @@ export function defaultSettings() {
     rings: { daysPerWeek: 5 }, // days a week the "on target" weekly rings ask for
     usda: { apiKey: '' }, // blank = shared DEMO_KEY
     // The diet the person follows (null = none) and, for flexitarians, meat-free days a week to aim for.
-    diet: { follow: null, meatFreeDays: 5 },
+    // avoidSeedOils: highlight recipes with seed oils and start swaps on "Seed-Oil Free".
+    diet: { follow: null, meatFreeDays: 5, avoidSeedOils: false },
     visibleNutrients: [...DEFAULT_VISIBLE],
     disclaimerAcceptedAt: null,
     setupCompletedAt: null,

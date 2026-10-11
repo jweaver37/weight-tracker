@@ -453,6 +453,18 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 6px 
 .credit-line { margin: -4px 0 0; font-size: 0.88rem; color: var(--muted); }
 .credit-line a { font-weight: 600; }
 
+/* Seed oils */
+.diet-badge.oil-seed { background: var(--warn-soft); color: var(--warn); }
+.diet-badge.oil-check { background: var(--warn-soft); color: var(--warn); }
+.diet-badge.oil-other { background: var(--surface-2); color: var(--muted); }
+.diet-badge.oil-non { background: var(--accent-soft); color: var(--accent); }
+/* Recipes with seed oil, for people avoiding them: still listed, but tinted with a swap prompt. */
+.entry-list li.needs-swap { background: var(--warn-soft); border-left: 4px solid var(--warn); border-radius: 8px; padding-left: 8px; margin: 2px 0; }
+.diet-row.other .diet-icon { background: var(--surface-2); color: var(--muted); }
+.seed-oil-notice { display: grid; gap: 8px; margin-bottom: 8px; }
+.seed-oil-notice p { margin: 0; }
+.seed-oil-notice .btn { justify-self: start; }
+
 /* Ingredient swaps */
 .swap-btn { flex: none; padding: 4px 10px; min-height: 32px; font-size: 0.8rem; }
 .swapped-note { display: block; margin: -6px 0 6px; color: var(--accent); font-size: 0.8rem; }

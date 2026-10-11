@@ -32,6 +32,7 @@ export function buildRecipeFile(recipe, customFields, include = { steps: true, p
       notes: include.steps ? recipe.notes ?? '' : '',
       meals: recipe.meals ?? [],
       dietOverrides: recipe.dietOverrides ?? {},
+      ...(recipe.seedOilOverride && { seedOilOverride: recipe.seedOilOverride }),
       ...(source && { source }),
       ...(include.photo && recipe.image && { image: recipe.image }),
       ingredients: (recipe.ingredients ?? []).map((i) => ({
@@ -84,6 +85,7 @@ export function readRecipeFile(text, localFields) {
     notes: String(r.notes ?? ''),
     meals: (Array.isArray(r.meals) ? r.meals : []).filter((m) => MEAL_KEYS.includes(m)),
     ...(cleanSource(r.source) && { source: cleanSource(r.source) }),
+    ...(['seed', 'other', 'non'].includes(r.seedOilOverride) && { seedOilOverride: r.seedOilOverride }),
     // Only small JPEG/PNG/WebP photos in the formats the app makes are accepted.
     ...(typeof r.image === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(r.image) && r.image.length < 3_000_000 && { image: r.image }),
     dietOverrides: Object.fromEntries(Object.entries(r.dietOverrides && typeof r.dietOverrides === 'object' ? r.dietOverrides : {})

@@ -1,5 +1,5 @@
-// Sorting and filtering the recipe list. Items are { recipe, per, diets } where `per` is nutrition
-// per serving ({ nutrients, custom }) and `diets` comes from recipeDiets().
+// Sorting and filtering the recipe list. Items are { recipe, per, diets, oil } where `per` is nutrition
+// per serving ({ nutrients, custom }), `diets` comes from recipeDiets() and `oil` from recipeSeedOil().
 import { NUTRIENTS } from './nutrients.js';
 import { targetKind } from './targets.js';
 
@@ -43,11 +43,13 @@ export function sortRecipes(items, key, direction) {
 //            maxCalories } — every set condition must hold. A recipe tagged with any chosen meal matches.
 // A diet filter keeps recipes that fit and ones marked "check" (shown with a "?"), never hiding
 // a possible match.
-export function filterRecipes(items, { query = '', diet = null, meals = [], nutrients = [], maxCalories = null }) {
+// seedOil: 'non' | 'other' | 'seed' — "seed" also keeps recipes marked "Seed Oil?" (check).
+export function filterRecipes(items, { query = '', diet = null, seedOil = null, meals = [], nutrients = [], maxCalories = null }) {
   const q = query.trim().toLowerCase();
-  return items.filter(({ recipe, per, diets }) => {
+  return items.filter(({ recipe, per, diets, oil }) => {
     if (q && !displayName(recipe).toLowerCase().includes(q)) return false;
     if (diet && diets[diet]?.status === 'no') return false;
+    if (seedOil && oil && !(oil.status === seedOil || (seedOil === 'seed' && oil.status === 'check'))) return false;
     if (meals.length && !meals.some((m) => (recipe.meals ?? []).includes(m))) return false;
     for (const f of nutrients) {
       const v = per.nutrients[f.key];
