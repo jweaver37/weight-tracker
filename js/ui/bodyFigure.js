@@ -10,6 +10,8 @@ const TAPES = {
   hips: { x: 100, y: 222, rx: 39 },
   armRight: { x: 54, y: 128, rx: 12, tilt: 12 },
   armLeft: { x: 146, y: 128, rx: 12, tilt: -12 },
+  forearmRight: { x: 49, y: 178, rx: 11, tilt: 5 },
+  forearmLeft: { x: 151, y: 178, rx: 11, tilt: -5 },
   thighRight: { x: 81, y: 266, rx: 18 },
   thighLeft: { x: 119, y: 266, rx: 18 },
   calfRight: { x: 80, y: 350, rx: 15 },

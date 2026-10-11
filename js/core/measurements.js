@@ -4,23 +4,26 @@
 import { inToCm } from './units.js';
 
 // side: measured on one side by default (left), or both when the person chooses.
-// optional: off unless turned on in Settings. gain: counts toward "build muscle" totals.
+// optional: the Settings switch that turns it on (off by default). gain: counts toward "build muscle" totals.
+// Keys stay stable when labels change ('arm' is shown as Biceps/Triceps).
 export const MEASUREMENTS = [
-  { key: 'neck', label: 'Neck', optional: true, hint: 'Just below the Adam’s apple, keeping the tape level.' },
+  { key: 'neck', label: 'Neck', optional: 'neck', hint: 'Just below the Adam’s apple, keeping the tape level.' },
   { key: 'chest', label: 'Chest', gain: true, hint: 'Around the fullest part, under your arms, after a normal breath out.' },
   { key: 'waist', label: 'Waist', hint: 'Level with your navel. Stand relaxed; don’t pull your stomach in.' },
-  { key: 'hips', label: 'Hips', optional: true, hint: 'Around the widest part of your buttocks, feet together.' },
-  { key: 'arm', label: 'Arm', side: true, gain: true, hint: 'Around the middle of your upper arm, relaxed and hanging down.' },
+  { key: 'hips', label: 'Hips', optional: 'hips', hint: 'Around the widest part of your buttocks, feet together.' },
+  { key: 'arm', label: 'Biceps/Triceps', side: true, gain: true, hint: 'Around the middle of your upper arm, over the biceps and triceps, relaxed and hanging down.' },
+  { key: 'forearm', label: 'Forearm', side: true, optional: 'forearms', gain: true, hint: 'Around the widest part, just below the elbow, arm relaxed.' },
   { key: 'thigh', label: 'Thigh', side: true, gain: true, hint: 'Around the widest part, just below your buttocks.' },
-  { key: 'calf', label: 'Calf', side: true, optional: true, gain: true, hint: 'Around the widest part of your calf, standing.' },
+  { key: 'calf', label: 'Calf', side: true, optional: 'calves', gain: true, hint: 'Around the widest part of your calf, standing.' },
 ];
 
 export function defaultBodySettings() {
   return {
     enabled: false,
-    bothSides: false, // arms, thighs and calves: left only, or left and right
+    bothSides: false, // biceps/triceps, forearms, thighs and calves: left only, or left and right
     neck: false,
     hips: false, // measured for women while the body-fat estimate is on
+    forearms: false,
     calves: false,
     composition: false, // show estimated body fat and BMI
   };
@@ -35,7 +38,7 @@ export function requiredReason(key, body, sex) {
   return null;
 }
 
-const isOn = (m, body, sex) => !m.optional || Boolean(body[m.key === 'calf' ? 'calves' : m.key]) || requiredReason(m.key, body, sex) != null;
+const isOn = (m, body, sex) => !m.optional || Boolean(body[m.optional]) || requiredReason(m.key, body, sex) != null;
 
 // The boxes to show, in order: { key, label, base, side, hint }. Keys: 'waist', 'armLeft', 'armRight'…
 export function activeFields(body, sex = null) {
