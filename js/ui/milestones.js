@@ -15,6 +15,20 @@ const LOOKBACK_DAYS = 400;
 
 let running = false;
 
+// After a weigh-in is deleted or corrected: remove weight-loss milestones the weigh-ins no longer
+// support (e.g. "lost 100 lb" from a typo), so real ones can be earned when reached.
+export async function pruneWeightMilestones() {
+  const points = await weightPoints();
+  const start = points[0]?.value ?? null;
+  const current = currentValue(points, todayStr());
+  for (const m of await repo.listAll('milestones')) {
+    if (m.type !== 'weightLoss') continue;
+    const stepKg = m.lostKg / m.level;
+    const level = start != null && current != null ? Math.floor((start - current) / stepKg + 1e-9) : 0;
+    if (m.level > level) await repo.remove('milestones', m.id);
+  }
+}
+
 export async function checkMilestones() {
   const goals = state.settings.goals;
   if (running || !Object.values(goals).some((g) => g.enabled)) return;

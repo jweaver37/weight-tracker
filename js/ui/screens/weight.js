@@ -1,5 +1,5 @@
 // Weight log: weigh-in entry, chart with 7-day average, and history.
-import { confirmDialog, h, toast, mount } from '../dom.js';
+import { confirmDialog, h, toast, mount, showDialog } from '../dom.js';
 import { state } from '../state.js';
 import * as repo from '../../data/repo.js';
 import { addDays, todayStr } from '../../core/dates.js';
@@ -8,8 +8,30 @@ import { weightToDisplay } from '../../core/units.js';
 import { field, weightInput } from '../fields.js';
 import { lineChart } from '../chart.js';
 import { fmtDate, fmtWeight } from '../format.js';
-import { checkAutoRecalc } from '../targetsFlow.js';
-import { checkMilestones } from '../milestones.js';
+import { syncTargetsWithWeights } from '../targetsFlow.js';
+import { checkMilestones, pruneWeightMilestones } from '../milestones.js';
+import { unusualWeighIn } from '../../core/targets.js';
+
+// Targets and weight milestones follow the weigh-ins, so adding, correcting or deleting one keeps them right.
+async function afterWeightsChanged() {
+  await pruneWeightMilestones();
+  await syncTargetsWithWeights();
+}
+
+// "Is 145 lb right? Your last weigh-in was 245 lb…" — resolves true to save anyway.
+function confirmUnusual(kg, { previous, diffKg }, unit) {
+  const dateText = fmtDate(previous.date, { weekday: 'short', month: 'short', day: 'numeric' });
+  const change = `${fmtWeight(Math.abs(diffKg), unit)} ${diffKg < 0 ? 'less' : 'more'}`;
+  return showDialog((close) =>
+    h('div', { class: 'dialog-body' },
+      h('h2', {}, `Is ${fmtWeight(kg, unit)} right?`),
+      h('p', {}, `Your previous weigh-in was `, h('strong', {}, fmtWeight(previous.value, unit)), ` on ${dateText} — that’s ${change}, more than usual day-to-day change.`),
+      h('p', { class: 'muted' }, 'If it was a typo, fix it before saving so your targets and progress stay accurate.'),
+      h('div', { class: 'dialog-actions' },
+        h('button', { class: 'btn', type: 'button', onClick: () => close(true) }, 'Yes, save it'),
+        h('button', { class: 'btn btn-primary', type: 'button', onClick: () => close(false) }, 'Fix it'))),
+  ).then(Boolean);
+}
 
 const RANGES = [
   { key: '1m', label: '1M', days: 30 },
@@ -47,11 +69,20 @@ function entryCard(records, unit, rerender) {
       weight.input.classList.add('invalid');
       return;
     }
+    // A big jump from the previous weigh-in is usually a typo (145 for 245): ask before saving.
+    const previous = records.filter((r) => r.date < date.value).sort((a, b) => (a.date < b.date ? 1 : -1))[0]
+      ?? records.filter((r) => r.date > date.value).sort((a, b) => (a.date < b.date ? -1 : 1))[0];
+    const unusual = previous && unusualWeighIn({ date: previous.date, value: previous.weightKg }, kg, date.value);
+    if (unusual && !(await confirmUnusual(kg, unusual, unit))) {
+      weight.input.focus();
+      weight.input.select();
+      return;
+    }
     // One weigh-in per day: a second entry for the same date replaces the first.
     const existing = records.find((r) => r.date === date.value);
     await repo.save('weights', { ...existing, date: date.value, weightKg: kg });
     toast(existing ? 'Weigh-in updated' : 'Weigh-in saved');
-    await checkAutoRecalc();
+    await afterWeightsChanged();
     rerender();
   };
   return h('form', { class: 'card', onSubmit: save },
@@ -114,6 +145,7 @@ function historyCard(records, unit, rerender) {
   const remove = async (r) => {
     if (await confirmDialog(`Delete the weigh-in from ${fmtDate(r.date)}?`, { okLabel: 'Delete', danger: true })) {
       await repo.remove('weights', r.id);
+      await afterWeightsChanged();
       rerender();
     }
   };

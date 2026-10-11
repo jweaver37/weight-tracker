@@ -1,5 +1,5 @@
 // Calorie and nutrient targets calculated from standard recommendations.
-import { parseDateStr } from './dates.js';
+import { addDays, parseDateStr } from './dates.js';
 
 // Everyday activity, not counting logged workouts: their calories are added to the day separately,
 // so including exercise here would count it twice.
@@ -97,13 +97,31 @@ export function calculateFromSettings(settings, weightKg, today) {
   });
 }
 
-// Calculated targets update only after the 7-day average has dropped by the threshold since the
-// last calculation, so day-to-day swings don't cause constant changes.
-export const shouldRecalculate = (targets, avgKg) =>
-  targets.mode === 'calculated' &&
-  targets.basisWeightKg != null &&
-  avgKg != null &&
-  targets.basisWeightKg - avgKg >= targets.recalcThresholdKg;
+// The weight calculated targets should be based on, worked out from the weigh-ins themselves so it is
+// always correct after any weigh-in is added, changed or deleted. Going through the history in date
+// order, the basis moves to the 7-day average whenever that average has moved by at least the
+// threshold (down or up) since the last move — so day-to-day swings don't change targets.
+// points: [{ date, value (kg) }] sorted by date.
+export function basisWeightFromHistory(points, thresholdKg) {
+  let basis = null;
+  for (const p of points) {
+    const start = addDays(p.date, -6);
+    const window = points.filter((q) => q.date >= start && q.date <= p.date);
+    const avg = window.reduce((s, q) => s + q.value, 0) / window.length;
+    if (basis == null || Math.abs(avg - basis) >= thresholdKg - 1e-9) basis = avg;
+  }
+  return basis;
+}
+
+// A weigh-in far from the previous one is probably a typo (145 for 245). Allowed change: the larger of
+// 5 lb (2.27 kg) or 3% of body weight, plus about ½ lb (0.23 kg) a day since the previous weigh-in.
+export function unusualWeighIn(previous, newKg, date) {
+  if (!previous) return null;
+  const days = Math.max(0, Math.round((parseDateStr(date) - parseDateStr(previous.date)) / 86400000));
+  const allowed = Math.max(2.27, previous.value * 0.03) + Math.abs(days) * 0.23;
+  const diff = newKg - previous.value;
+  return Math.abs(diff) > allowed ? { previous, diffKg: diff, allowedKg: allowed } : null;
+}
 
 export const applyCalculation = (targets, result, basisWeightKg, nowIso) =>
   ({ ...targets, values: result.values, basisWeightKg, calculatedAt: nowIso });

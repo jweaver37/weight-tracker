@@ -1,8 +1,8 @@
 // Calculating targets from the user's data, and the notice shown when they change.
 import * as repo from '../data/repo.js';
 import { state, saveSettings } from './state.js';
-import { dailyValues, averageOver, currentValue } from '../core/trends.js';
-import { applyCalculation, calculateFromSettings, CALCULATED_KEYS, shouldRecalculate } from '../core/targets.js';
+import { dailyValues, currentValue } from '../core/trends.js';
+import { applyCalculation, basisWeightFromHistory, calculateFromSettings, CALCULATED_KEYS } from '../core/targets.js';
 import { nutrientByKey } from '../core/nutrients.js';
 import { todayStr } from '../core/dates.js';
 import { h, showDialog } from './dom.js';
@@ -10,11 +10,17 @@ import { fmtAmount } from './format.js';
 
 export const weightPoints = async () => dailyValues(await repo.listAll('weights'), 'weightKg');
 
-// Recalculates and saves targets from the given weight (default: current 7-day average).
+// The weight calculated targets are based on, from the weigh-in history (see basisWeightFromHistory).
+async function historyBasis() {
+  const points = await weightPoints();
+  return basisWeightFromHistory(points, state.settings.targets.recalcThresholdKg) ?? currentValue(points, todayStr());
+}
+
+// Recalculates and saves targets from the given weight (default: the basis from the weigh-in history).
 // Returns { oldValues, newValues } or null when the profile is incomplete.
 export async function recalculateTargets(weightKg) {
   const today = todayStr();
-  const basis = weightKg ?? currentValue(await weightPoints(), today);
+  const basis = weightKg ?? await historyBasis();
   const s = state.settings;
   const result = calculateFromSettings(s, basis, today);
   if (!result) return null;
@@ -36,12 +42,23 @@ export async function energyBreakdown() {
   return result && { ...result, weightKg };
 }
 
-// After a weigh-in: recalculate once the 7-day average has dropped by the threshold, and show the change.
-export async function checkAutoRecalc() {
-  const avg = averageOver(await weightPoints(), todayStr(), 7);
-  if (!shouldRecalculate(state.settings.targets, avg)) return;
-  const change = await recalculateTargets(avg);
-  if (change) await showTargetChange(change, 'Your 7-day average weight has dropped, so your targets were recalculated.');
+// After any weigh-in is added, changed or deleted: work the basis out again from the whole history,
+// so targets are always right — including after deleting a mistaken weigh-in. Shows the old and new
+// targets when they change.
+export async function syncTargetsWithWeights() {
+  const s = state.settings;
+  if (s.targets.mode !== 'calculated') return;
+  const before = s.targets.basisWeightKg;
+  const basis = await historyBasis();
+  if (basis == null || (before != null && Math.abs(basis - before) < 1e-6)) return;
+  const change = await recalculateTargets(basis);
+  if (!change || CALCULATED_KEYS.every((k) => change.oldValues?.[k] === change.newValues[k])) return;
+  const message = before == null
+    ? 'Your targets were calculated from your weigh-ins.'
+    : basis < before
+      ? 'Your 7-day average weight has dropped, so your targets were recalculated.'
+      : 'Your weigh-ins changed (a lower weight was corrected or removed, or your 7-day average rose), so your targets were recalculated.';
+  await showTargetChange(change, message);
 }
 
 export function showTargetChange({ oldValues, newValues, floorApplied }, message) {
