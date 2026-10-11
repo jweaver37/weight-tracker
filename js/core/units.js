@@ -12,6 +12,8 @@ export const weightToDisplay = (kg, unit) => (unit === 'kg' ? kg : kgToLb(kg));
 export const weightFromDisplay = (value, unit) => (unit === 'kg' ? value : lbToKg(value));
 export const lengthToDisplay = (cm, unit) => (unit === 'cm' ? cm : cmToIn(cm));
 export const lengthFromDisplay = (value, unit) => (unit === 'cm' ? value : inToCm(value));
+// Inches are written "in." (with a period) so they don't read as the word "in".
+export const lengthLabel = (unit) => (unit === 'cm' ? 'cm' : 'in.');
 
 // Drinks: stored in ml, shown in US fluid ounces ('floz') or ml.
 export const ML_PER_FLOZ = 29.5735295625;

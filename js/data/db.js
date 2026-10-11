@@ -3,10 +3,10 @@
 
 const DB_NAME = 'weight-tracker';
 // Bump the version when adding a store; upgrades create any store that is missing.
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
-export const STORES = ['users', 'settings', 'logEntries', 'customFields', 'weights', 'workouts', 'activities', 'recipes', 'milestones', 'water'];
-const DATED_STORES = ['logEntries', 'weights', 'workouts', 'water'];
+export const STORES = ['users', 'settings', 'logEntries', 'customFields', 'weights', 'workouts', 'activities', 'recipes', 'milestones', 'water', 'measurements'];
+const DATED_STORES = ['logEntries', 'weights', 'workouts', 'water', 'measurements'];
 
 let dbPromise = null;
 

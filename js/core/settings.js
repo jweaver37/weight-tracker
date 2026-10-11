@@ -2,6 +2,7 @@
 import { DEFAULT_VISIBLE } from './nutrients.js';
 import { lbToKg, ML_PER_FLOZ } from './units.js';
 import { defaultGoals } from './goals.js';
+import { defaultBodySettings } from './measurements.js';
 
 export function defaultSettings() {
   return {
@@ -22,7 +23,11 @@ export function defaultSettings() {
     goals: defaultGoals(),
     // Set once from the first 7 weigh-ins (see baseline.js), then left as is: { weightKg, weighIns, startDate, setOn }.
     baseline: null,
-    baselineFrom: null, // set by "Start a new baseline": only weigh-ins from this date count
+    baselineFrom: null, // set by "Start a new baseline": only weigh-ins (and measurements) from this date count
+    // Body measurements tab and options (see measurements.js); the measurement baseline is the first
+    // full set of measurements: { date, values }, set once like the weight baseline.
+    body: defaultBodySettings(),
+    measureBaseline: null,
     rings: { daysPerWeek: 5 }, // days a week the "on target" weekly rings ask for
     usda: { apiKey: '' }, // blank = shared DEMO_KEY
     // The diet the person follows (null = none) and, for flexitarians, meat-free days a week to aim for.
@@ -47,6 +52,7 @@ export function withDefaults(saved) {
     rings: { ...d.rings, ...saved.rings },
     usda: { ...d.usda, ...saved.usda },
     diet: { ...d.diet, ...saved.diet },
+    body: { ...d.body, ...saved.body },
     // Profiles saved before the age options have a birth date and no mode: keep using the date.
     profile: { ...d.profile, ...(saved.profile?.birthDate && !saved.profile.birthMode && { birthMode: 'date' }), ...saved.profile },
     targets: { ...d.targets, ...saved.targets },

@@ -2,6 +2,7 @@
 import { addDays, parseDateStr } from './dates.js';
 import { targetKind } from './targets.js';
 import { lbToKg } from './units.js';
+import { defaultMeasureGoal } from './measurements.js';
 
 export function defaultGoals() {
   return {
@@ -10,6 +11,7 @@ export function defaultGoals() {
     waterStreak: { enabled: false, days: 7 },
     workoutsPerWeek: { enabled: false, perWeek: 3, weeks: 4 },
     nutrition: { enabled: false, nutrient: 'protein', days: 5 },
+    measurements: defaultMeasureGoal(),
   };
 }
 

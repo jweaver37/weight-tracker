@@ -7,6 +7,7 @@ import { state, loadSettings } from './state.js';
 import { renderOnboarding } from './screens/onboarding.js';
 import { renderToday } from './screens/today.js';
 import { renderWeight } from './screens/weight.js';
+import { renderBody } from './screens/body.js';
 import { renderSettings } from './screens/settings.js';
 import { renderRecipes } from './screens/recipes.js';
 import { renderGoals } from './screens/goals.js';
@@ -17,15 +18,18 @@ import { checkMilestones } from './milestones.js';
 const ICONS = {
   today: '<svg viewBox="0 0 24 24"><path d="M4 11h16M8 3v4M16 3v4M5 7h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/></svg>',
   weight: '<svg viewBox="0 0 24 24"><path d="M4 18 9 12l4 3 7-8M15 7h5v5"/></svg>',
+  body: '<svg viewBox="0 0 24 24"><rect x="2.5" y="8" width="19" height="8" rx="2"/><path d="M6.5 8v3M10 8v4M13.5 8v3M17 8v4"/></svg>',
   goals: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m12 7.5 1.4 2.9 3.1.4-2.3 2.2.6 3.1-2.8-1.5-2.8 1.5.6-3.1-2.3-2.2 3.1-.4Z"/></svg>',
   reports: '<svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
   recipes: '<svg viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6"/></svg>',
   settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>',
 };
 
+// `when`: the tab shows only while this is true (Body can be turned off in Settings).
 const TABS = [
   { route: 'today', label: 'Today', render: renderToday },
   { route: 'weight', label: 'Weight', render: renderWeight },
+  { route: 'body', label: 'Body', render: renderBody, when: (s) => s.body.enabled },
   { route: 'recipes', label: 'Recipes', render: renderRecipes },
   { route: 'goals', label: 'Goals', render: renderGoals },
   { route: 'reports', label: 'Reports', render: renderReports },
@@ -35,8 +39,10 @@ const TABS = [
 const view = document.getElementById('view');
 const tabbar = document.getElementById('tabbar');
 
+const visibleTabs = () => TABS.filter((t) => !t.when || t.when(state.settings));
+
 function buildTabs() {
-  tabbar.replaceChildren(...TABS.map((t) => {
+  tabbar.replaceChildren(...visibleTabs().map((t) => {
     const icon = h('span', { class: 'tab-icon', 'aria-hidden': 'true' });
     icon.innerHTML = ICONS[t.route];
     return h('a', { href: `#/${t.route}`, class: 'tab', 'data-route': t.route }, icon, h('span', {}, t.label));
@@ -56,7 +62,8 @@ async function route() {
     }
     // Routes look like #/today or #/recipes/<id>.
     const [name, param] = location.hash.replace(/^#\/?/, '').split('/');
-    const tab = TABS.find((t) => t.route === name) ?? TABS[0];
+    buildTabs(); // settings may have changed (e.g. a backup was imported)
+    const tab = visibleTabs().find((t) => t.route === name) ?? TABS[0];
     for (const a of tabbar.querySelectorAll('.tab')) a.classList.toggle('active', a.dataset.route === tab.route);
     await tab.render(view, param);
     window.scrollTo(0, 0);
@@ -85,6 +92,8 @@ async function start() {
   await initUser();
   await loadSettings();
   buildTabs();
+  // Settings fires this after turning a tab on or off.
+  window.addEventListener('tabs-changed', buildTabs);
   window.addEventListener('hashchange', route);
   route();
 }

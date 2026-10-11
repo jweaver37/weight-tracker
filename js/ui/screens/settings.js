@@ -10,7 +10,9 @@ import { energyBreakdown, recalculateTargets, showTargetChange } from '../target
 import { exportBackup, importBackup } from '../backupActions.js';
 import { DISCLAIMER_TEXT, DISCLAIMER_TITLE } from '../disclaimer.js';
 import { fmt, fmtAmount, fmtDate, fmtWeight } from '../format.js';
-import { roundTo, volumeFromDisplay, volumeLabel, volumeToDisplay, weightFromDisplay, weightToDisplay } from '../../core/units.js';
+import {
+  lengthFromDisplay, lengthLabel, lengthToDisplay, roundTo, volumeFromDisplay, volumeLabel, volumeToDisplay, weightFromDisplay, weightToDisplay,
+} from '../../core/units.js';
 import { checkMilestones } from '../milestones.js';
 import { todayStr } from '../../core/dates.js';
 import { looksLikeApiKey } from '../../data/usda.js';
@@ -31,6 +33,7 @@ export async function renderSettings(view, { onDataReplaced, focus }) {
     profileSection(rerender, breakdown),
     waterSection(),
     dietSection(rerender),
+    bodySection(rerender),
     goalsSection(rerender),
     nutrientsSection(),
     customFieldsSection(customFields, rerender),
@@ -250,22 +253,49 @@ function waterSection() {
     field('Daily goal', target.el));
 }
 
+// Body measurements: the Body tab and what it measures.
+function bodySection(rerender) {
+  const b = state.settings.body;
+  const toggle = (key, title, description) => {
+    const box = h('input', { type: 'checkbox', checked: b[key] });
+    box.addEventListener('change', async () => {
+      await saveSettings({ ...state.settings, body: { ...state.settings.body, [key]: box.checked } });
+      if (key === 'enabled') window.dispatchEvent(new Event('tabs-changed'));
+      rerender();
+    });
+    return h('label', { class: 'choice' }, box, h('span', {}, h('strong', {}, title), description && h('small', {}, description)));
+  };
+  return h('section', { class: 'card' },
+    h('h2', {}, 'Body measurements'),
+    h('div', { class: 'form-grid' },
+      toggle('enabled', 'Track body measurements', 'Adds a Body tab for weekly tape measurements: chest, waist, hips, arms and thighs.'),
+      b.enabled && h('div', { class: 'goal-options form-grid' },
+        toggle('bothSides', 'Measure left and right sides', 'Arms, thighs and calves are measured on both sides instead of just the left.'),
+        toggle('neck', 'Measure neck'),
+        toggle('calves', 'Measure calves'),
+        toggle('composition', 'Show body fat and BMI estimates',
+          'Estimated body fat needs your waist, neck and height (and hips for women), so neck is measured while this is on. BMI uses your weight and height.'))));
+}
+
 // The baseline, and starting a new one (e.g. after a long break).
 function baselineControl(rerender) {
   const s = state.settings;
   const unit = s.units.weight;
   const restart = async () => {
+    const body = state.settings.body.enabled;
     const ok = await confirmDialog(
       'A new baseline is set from your next 7 weigh-ins, starting today, and you’ll earn a new Baseline Set trophy then. ' +
-      'Weight-loss milestones will be measured from the new baseline, so you can earn them again. ' +
-      'Your current baseline and weight trophies stay in your Trophy Room under “From Earlier Baselines”.',
+      (body ? 'Your measurement baseline starts over too, from your next full set of measurements. ' : '') +
+      `Weight-loss${body ? ' and total-inch' : ''} milestones will be measured from the new baseline, so you can earn them again. ` +
+      `Your current baseline${body ? 's' : ''} and trophies stay in your Trophy Room under “From Earlier Baselines”.`,
       { title: 'Start a new baseline?', okLabel: 'Start New Baseline', danger: true });
     if (!ok) return;
-    // Keep the old Baseline Set trophy under its own key so a new one can be earned.
+    // Keep the old baseline trophies under their own keys so new ones can be earned.
     for (const m of await repo.listAll('milestones')) {
       if (m.key === 'baseline') await repo.save('milestones', { ...m, key: `baseline:${m.startDate}` });
+      if (m.key === 'measureBaseline') await repo.save('milestones', { ...m, key: `measureBaseline:${m.date}` });
     }
-    await saveSettings({ ...state.settings, baseline: null, baselineFrom: todayStr() });
+    await saveSettings({ ...state.settings, baseline: null, measureBaseline: null, baselineFrom: todayStr() });
     toast('New baseline started');
     rerender();
   };
@@ -316,6 +346,14 @@ function goalsSection(rerender) {
   const nutrientKeys = Object.keys(s.targets.values).filter((k) => nutrientByKey(k));
   const nutrient = selectInput(nutrientKeys.map((k) => ({ value: k, label: nutrientByKey(k).label })), s.goals.nutrition.nutrient);
   const nutritionDays = presetPicker([4, 5, 6, 7], s.goals.nutrition.days, { unit: 'of 7 days', max: 7 });
+  const lengthUnit = s.units.length;
+  const mg = s.goals.measurements;
+  const measureMode = selectInput([
+    { value: 'lose', label: 'Lose inches (all measurements)' },
+    { value: 'gain', label: 'Build muscle (chest, arms, thighs, calves)' },
+  ], mg.mode);
+  const measureStep = presetPicker(lengthUnit === 'cm' ? [2, 5, 10, 25] : [1, 2, 5, 10],
+    roundTo(lengthToDisplay(mg.stepCm, lengthUnit), 2), { unit: lengthLabel(lengthUnit), max: lengthUnit === 'cm' ? 250 : 100 });
   const ringDays = presetPicker([4, 5, 6, 7], s.rings.daysPerWeek, { unit: 'of 7 days', max: 7 });
   ringDays.el.addEventListener('change', async () => {
     const v = ringDays.read();
@@ -345,7 +383,11 @@ function goalsSection(rerender) {
         nutrientKeys.length
           ? h('div', { class: 'input-row' }, field('Target', nutrient), field('On at least', nutritionDays.el))
           : h('p', { class: 'muted' }, 'Set nutrient targets above first.'),
-        () => { const d = nutritionDays.read(); return nutrientKeys.length && d && { nutrient: nutrient.value, days: Math.round(d) }; })),
+        () => { const d = nutritionDays.read(); return nutrientKeys.length && d && { nutrient: nutrient.value, days: Math.round(d) }; }),
+      s.body.enabled && goal('measurements', 'Total inches',
+        'A milestone each time your measurements add up to this much change since your measurement baseline. Losing counts every measurement, so when one area stalls, others still count. Building muscle counts growth in chest, arms, thighs and calves.',
+        h('div', { class: 'input-row' }, field('Goal', measureMode), field('Every', measureStep.el)),
+        () => { const v = measureStep.read(); return v && { mode: measureMode.value, stepCm: lengthFromDisplay(v, lengthUnit) }; })),
     field('Weekly rings: days on target', ringDays.el,
       'On the Goals tab, the weekly “Calorie days” and “Water days” rings ask for this many days a week.'));
 }

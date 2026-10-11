@@ -93,7 +93,7 @@ function trophyRoom(trophies, s) {
   const longDate = (d) => fmtDate(d, { month: 'short', day: 'numeric', year: 'numeric' });
   const shown = trophies.filter((m) => m.acknowledgedAt)
     .sort((a, b) => (a.achievedOn === b.achievedOn ? (a.createdAt < b.createdAt ? 1 : -1) : a.achievedOn < b.achievedOn ? 1 : -1));
-  const earlier = shown.filter((m) => fromEarlierBaseline(m, s.baseline));
+  const earlier = shown.filter((m) => fromEarlierBaseline(m, s));
   const current = shown.filter((m) => !earlier.includes(m));
 
   const item = (m, old) => {

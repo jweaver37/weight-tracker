@@ -1,5 +1,5 @@
 // Display formatting.
-import { roundTo, weightToDisplay, lengthToDisplay } from '../core/units.js';
+import { roundTo, weightToDisplay, lengthLabel, lengthToDisplay } from '../core/units.js';
 import { parseDateStr } from '../core/dates.js';
 
 export function fmt(value, decimals = 0) {
@@ -17,7 +17,7 @@ export function fmtWeight(kg, unit, decimals = 1) {
 }
 
 export const fmtLength = (cm, unit, decimals = 1) =>
-  cm == null ? '–' : `${fmt(lengthToDisplay(cm, unit), decimals)} ${unit}`;
+  cm == null ? '–' : `${fmt(lengthToDisplay(cm, unit), decimals)} ${lengthLabel(unit)}`;
 
 // Small gram amounts keep one decimal; everything else is whole numbers.
 export function fmtAmount(value, unit) {

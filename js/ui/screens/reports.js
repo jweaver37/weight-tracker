@@ -8,7 +8,8 @@ import { rollingAverage } from '../../core/trends.js';
 import { ACTIVITY_LEVELS, profileAge } from '../../core/targets.js';
 import { MEALS } from '../../core/nutrition.js';
 import { nutrientByKey } from '../../core/nutrients.js';
-import { volumeLabel, volumeToDisplay, weightToDisplay } from '../../core/units.js';
+import { lengthLabel, lengthToDisplay, volumeLabel, volumeToDisplay, weightToDisplay } from '../../core/units.js';
+import { activeFields, bmi, bmiCategory, fieldLabel, navyBodyFat } from '../../core/measurements.js';
 import { field, selectInput } from '../fields.js';
 import { fmt, fmtAmount, fmtDate, fmtLength, fmtWeight } from '../format.js';
 import { entryAmountText, entryCalories } from '../foodEntry.js';
@@ -24,6 +25,7 @@ export const MAX_FOOD_LOG_DAYS = 14;
 
 const SECTIONS = [
   { key: 'weight', label: 'Weight chart & weigh-ins' },
+  { key: 'measurements', label: 'Body measurements', when: (s) => s.body.enabled },
   { key: 'daily', label: `Daily totals (weekly averages for ranges over ${DAILY_TABLE_MAX_DAYS} days)` },
   { key: 'workouts', label: 'Workout log' },
   { key: 'food', label: 'Full food log (every item eaten)' },
@@ -35,7 +37,7 @@ const options = {
   from: addDays(todayStr(), -29),
   to: todayStr(),
   month: todayStr().slice(0, 7), // 'YYYY-MM'
-  sections: { weight: true, daily: true, workouts: true, food: false },
+  sections: { weight: true, measurements: true, daily: true, workouts: true, food: false },
 };
 
 function presetRange(preset, today) {
@@ -76,16 +78,21 @@ export async function renderReports(view) {
       preview]);
 
   if (problems.length) return;
-  const sections = { ...options.sections, food: options.sections.food && !foodLogTooLong };
-  const [entries, workouts, water, points, breakdown] = await Promise.all([
+  const sections = {
+    ...options.sections,
+    food: options.sections.food && !foodLogTooLong,
+    measurements: options.sections.measurements && state.settings.body.enabled,
+  };
+  const [entries, workouts, water, points, breakdown, measurements] = await Promise.all([
     repo.listRange('logEntries', start, end),
     repo.listRange('workouts', start, end),
     repo.listRange('water', start, end),
     weightPoints(),
     energyBreakdown(),
+    repo.listRange('measurements', start, end),
   ]);
   const report = buildReport({ start, end, entries, workouts, water, points, settings: state.settings });
-  mount(preview, reportDocument(report, points, sections, breakdown));
+  mount(preview, reportDocument(report, points, sections, breakdown, measurements));
   estimate.textContent = `${dayCount} days · about ${estimatePages(preview.firstChild)} printed pages.`;
   fitPreview(preview);
 }
@@ -126,7 +133,7 @@ function optionsCard(today, rerender, foodLogTooLong) {
   from.addEventListener('change', () => { options.from = from.value; rerender(); });
   to.addEventListener('change', () => { options.to = to.value; rerender(); });
 
-  const boxes = SECTIONS.map((sec) => h('label', { class: 'check' },
+  const boxes = SECTIONS.filter((sec) => !sec.when || sec.when(state.settings)).map((sec) => h('label', { class: 'check' },
     h('input', {
       type: 'checkbox', checked: options.sections[sec.key],
       onChange: (e) => { options.sections[sec.key] = e.target.checked; rerender(); },
@@ -151,7 +158,7 @@ const estimatePages = (el) => Math.max(1, Math.ceil((el.scrollHeight - PREVIEW_P
 
 // ---- The report itself ----
 
-function reportDocument(report, points, sections, breakdown) {
+function reportDocument(report, points, sections, breakdown, measurements) {
   const s = state.settings;
   const range = `${fmtDate(report.start, { month: 'short', day: 'numeric', year: 'numeric' })} – ${fmtDate(report.end, { month: 'short', day: 'numeric', year: 'numeric' })}`;
   return h('article', { class: 'report' },
@@ -165,6 +172,7 @@ function reportDocument(report, points, sections, breakdown) {
     profileBlock(s, breakdown),
     summaryBlock(report, s),
     sections.weight && weightBlock(report, points, s),
+    sections.measurements && measurementsBlock(measurements, points, s),
     sections.daily && (report.summary.dayCount > DAILY_TABLE_MAX_DAYS ? weeklyBlock(report, s) : dailyBlock(report, s)),
     sections.workouts && workoutBlock(report),
     sections.food && foodBlock(report));
@@ -201,7 +209,7 @@ const factList = (rows) => h('dl', { class: 'fact-list' }, rows.map(([k, v]) => 
 function fmtHeight(cm, unit) {
   if (unit === 'cm') return fmtLength(cm, 'cm', 0);
   const inches = Math.round(cm / 2.54);
-  return `${Math.floor(inches / 12)} ft ${inches % 12} in`;
+  return `${Math.floor(inches / 12)} ft ${inches % 12} in.`;
 }
 
 function summaryBlock(report, s) {
@@ -238,6 +246,42 @@ function weightBlock(report, points, s) {
     // Long ranges rely on the chart and the weekly table instead of listing every weigh-in.
     shown.length > 0 && report.summary.dayCount <= DAILY_TABLE_MAX_DAYS && h('ul', { class: 'weigh-in-grid' }, shown.map((p) =>
       h('li', {}, h('span', {}, fmtDate(p.date, { month: 'short', day: 'numeric' })), h('strong', {}, fmtWeight(p.value, unit))))));
+}
+
+// Each measurement entry in the range, the change from first to last, and (when turned on)
+// the body-fat and BMI estimates from the last entry.
+function measurementsBlock(measurements, points, s) {
+  const unit = s.units.length;
+  const rows = [...measurements].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const seen = new Set(rows.flatMap((e) => Object.keys(e.values ?? {})));
+  const order = [...activeFields(s.body).map((f) => f.key), ...seen];
+  const keys = [...new Set(order)].filter((k) => seen.has(k));
+  if (!rows.length) {
+    return h('section', { class: 'report-section' }, h('h2', {}, 'Body measurements'), h('p', {}, 'No measurements in this period.'));
+  }
+  const first = rows[0].values;
+  const last = rows[rows.length - 1].values;
+  const change = (k) => (first[k] && last[k] && rows.length > 1
+    ? `${last[k] - first[k] > 0.004 ? '+' : last[k] - first[k] < -0.004 ? '−' : ''}${fmtLength(Math.abs(last[k] - first[k]), unit)}`
+    : '–');
+
+  const p = s.profile;
+  const bf = navyBodyFat({ sex: p.sex, heightCm: p.heightCm, waistCm: last.waist, neckCm: last.neck, hipsCm: last.hips });
+  const lastDate = rows[rows.length - 1].date;
+  const bmiValue = bmi(points.filter((pt) => pt.date <= lastDate).at(-1)?.value, p.heightCm);
+
+  return h('section', { class: 'report-section keep-together' },
+    h('h2', {}, `Body measurements (${lengthLabel(unit)})`),
+    h('table', { class: 'report-table' },
+      h('thead', {}, h('tr', {}, h('th', { class: 'left' }, 'Date'), keys.map((k) => h('th', {}, fieldLabel(k))))),
+      h('tbody', {}, rows.map((e) => h('tr', {},
+        h('td', { class: 'left' }, fmtDate(e.date, { month: 'short', day: 'numeric' })),
+        keys.map((k) => h('td', {}, e.values[k] ? fmt(lengthToDisplay(e.values[k], unit), 1) : '–'))))),
+      rows.length > 1 && h('tfoot', {}, h('tr', {},
+        h('th', { class: 'left' }, 'Change'), keys.map((k) => h('td', {}, change(k)))))),
+    s.body.composition && h('p', { class: 'report-note' },
+      `As of ${fmtDate(lastDate, { month: 'short', day: 'numeric' })}: estimated body fat ${bf == null ? '–' : `${fmt(bf, 1)}%`} (U.S. Navy method)`,
+      ` · BMI ${bmiValue == null ? '–' : `${fmt(bmiValue, 1)} (${bmiCategory(bmiValue)})`}. Estimates only.`));
 }
 
 function dailyBlock(report, s) {

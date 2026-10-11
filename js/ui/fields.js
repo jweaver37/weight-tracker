@@ -83,7 +83,7 @@ export function heightInput(cm, unit) {
   return {
     el: h('div', { class: 'input-row' },
       h('div', { class: 'input-unit' }, ftInput, h('span', {}, 'ft')),
-      h('div', { class: 'input-unit' }, inInput, h('span', {}, 'in'))),
+      h('div', { class: 'input-unit' }, inInput, h('span', {}, 'in.'))),
     read: () => {
       const f = readNumber(ftInput);
       const i = readNumber(inInput);

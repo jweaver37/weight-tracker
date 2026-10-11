@@ -6,10 +6,13 @@ import { state, saveSettings } from './state.js';
 import { addDays, todayStr } from '../core/dates.js';
 import { evaluateGoals } from '../core/goals.js';
 import { baselineMilestone, baselineProgress } from '../core/baseline.js';
+import {
+  changesSinceBaseline, evaluateMeasureGoal, findMeasureBaseline, latestValues, measureLevel, totalProgress,
+} from '../core/measurements.js';
 import { entryNutrients, waterMl } from '../core/nutrition.js';
 import { currentValue } from '../core/trends.js';
 import { nutrientByKey } from '../core/nutrients.js';
-import { fmt, fmtDate, fmtWeight } from './format.js';
+import { fmt, fmtDate, fmtLength, fmtWeight } from './format.js';
 import { weightPoints } from './targetsFlow.js';
 
 // History needed to measure the longest goals (a 30-day streak, several weeks of workouts).
@@ -33,6 +36,28 @@ export async function pruneWeightMilestones() {
   }
 }
 
+// After measurements are deleted or corrected: same idea for total-inch milestones.
+export async function pruneMeasureMilestones() {
+  const s = state.settings;
+  const baseline = s.measureBaseline;
+  const latest = latestValues(await repo.listAll('measurements'), todayStr());
+  for (const m of await repo.listAll('milestones')) {
+    if (m.type !== 'measureTotal' || !baseline || m.baselineStart !== baseline.date) continue;
+    const total = totalProgress(changesSinceBaseline(baseline, latest), m.mode);
+    if (m.level > measureLevel(total, m.totalCm / m.level)) await repo.remove('milestones', m.id);
+  }
+}
+
+// Sets the measurement baseline from the first full set of measurements; returns its milestone, or null.
+async function establishMeasureBaseline(measurements) {
+  const s = state.settings;
+  if (!s.body.enabled || s.measureBaseline) return null;
+  const b = findMeasureBaseline(measurements, s.body, s.baselineFrom);
+  if (!b) return null;
+  await saveSettings({ ...state.settings, measureBaseline: b });
+  return { key: 'measureBaseline', type: 'measureBaseline', date: b.date, values: b.values };
+}
+
 // Sets the baseline once its weigh-ins are in; returns its milestone, or null.
 async function establishBaseline(points, today) {
   if (state.settings.baseline) return null;
@@ -51,11 +76,12 @@ export async function checkMilestones() {
     const today = todayStr();
     const from = addDays(today, -LOOKBACK_DAYS);
     const goals = state.settings.goals;
-    const [points, entries, workouts, waterRecords, achieved] = await Promise.all([
+    const [points, entries, workouts, waterRecords, measurements, achieved] = await Promise.all([
       weightPoints(),
       repo.listRange('logEntries', from, today),
       repo.listRange('workouts', from, today),
       repo.listRange('water', from, today),
+      repo.listAll('measurements'),
       repo.listAll('milestones'),
     ]);
 
@@ -95,6 +121,15 @@ export async function checkMilestones() {
     });
     if (newBaseline && !achieved.some((m) => m.key === newBaseline.key)) found.unshift(newBaseline);
 
+    const newMeasureBaseline = await establishMeasureBaseline(measurements);
+    if (newMeasureBaseline && !achieved.some((m) => m.key === newMeasureBaseline.key)) found.push(newMeasureBaseline);
+    if (state.settings.body.enabled) {
+      const measureMilestone = evaluateMeasureGoal({
+        goal: goals.measurements, baseline: state.settings.measureBaseline, entries: measurements, today, achieved,
+      });
+      if (measureMilestone) found.push(measureMilestone);
+    }
+
     // Recorded before showing, so one closed mid-message (app shut) is shown again next time.
     const pending = achieved.filter((m) => !m.acknowledgedAt);
     for (const milestone of found) {
@@ -119,6 +154,24 @@ export function describeMilestone(m) {
         title: `Baseline Set: ${fmtWeight(m.weightKg, unit)}`,
         body: `The average of ${m.weighIns} weigh-in${m.weighIns === 1 ? '' : 's'} starting ${fmtDate(m.startDate, { month: 'short', day: 'numeric', year: 'numeric' })}: the starting point for weight-loss milestones, measured with your 7-day average weight.`,
       };
+    case 'measureBaseline':
+      return {
+        title: 'Measurements Baseline Set',
+        body: `Your measurements from ${fmtDate(m.date, { month: 'short', day: 'numeric', year: 'numeric' })} are the starting point for your total-inch milestones.`,
+      };
+    case 'measureTotal': {
+      const lu = state.settings.units.length;
+      const since = fmtDate(m.baselineStart, { month: 'short', day: 'numeric', year: 'numeric' });
+      return m.mode === 'gain'
+        ? {
+          title: `${fmtLength(m.totalCm, lu, 1)} Gained!`,
+          body: `Your chest, arms, thighs and calves have gained ${fmtLength(m.actualCm, lu)} in total since your baseline on ${since}.`,
+        }
+        : {
+          title: `${fmtLength(m.totalCm, lu, 1)} Lost Overall!`,
+          body: `Across all your measurements you’ve lost ${fmtLength(m.actualCm, lu)} since your baseline on ${since}.`,
+        };
+    }
     case 'weightLoss':
       return {
         title: `You’ve Lost ${fmtWeight(m.lostKg, unit, unit === 'kg' ? 1 : 0)}!`,
