@@ -19,6 +19,14 @@ export function fmtWeight(kg, unit, decimals = 1) {
 export const fmtLength = (cm, unit, decimals = 1) =>
   cm == null ? '–' : `${fmt(lengthToDisplay(cm, unit), decimals)} ${lengthLabel(unit)}`;
 
+// Height: "5 ft 10 in." or "178 cm".
+export function fmtHeight(cm, unit) {
+  if (cm == null) return '–';
+  if (unit === 'cm') return fmtLength(cm, 'cm', 0);
+  const inches = Math.round(cm / 2.54);
+  return `${Math.floor(inches / 12)} ft ${inches % 12} in.`;
+}
+
 // Small gram amounts keep one decimal; everything else is whole numbers.
 export function fmtAmount(value, unit) {
   const decimals = unit === 'kcal' || Math.abs(value) >= 10 ? 0 : 1;

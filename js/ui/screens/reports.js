@@ -11,7 +11,7 @@ import { nutrientByKey } from '../../core/nutrients.js';
 import { lengthLabel, lengthToDisplay, volumeLabel, volumeToDisplay, weightToDisplay } from '../../core/units.js';
 import { activeFields, bmi, bmiCategory, fieldLabel, navyBodyFat } from '../../core/measurements.js';
 import { field, selectInput } from '../fields.js';
-import { fmt, fmtAmount, fmtDate, fmtLength, fmtWeight } from '../format.js';
+import { fmt, fmtAmount, fmtDate, fmtHeight, fmtLength, fmtWeight } from '../format.js';
 import { entryAmountText, entryCalories } from '../foodEntry.js';
 import { lineChart } from '../chart.js';
 import { energyBreakdown, weightPoints } from '../targetsFlow.js';
@@ -205,12 +205,6 @@ function profileBlock(s, breakdown) {
 }
 
 const factList = (rows) => h('dl', { class: 'fact-list' }, rows.map(([k, v]) => [h('dt', {}, k), h('dd', {}, v)]));
-
-function fmtHeight(cm, unit) {
-  if (unit === 'cm') return fmtLength(cm, 'cm', 0);
-  const inches = Math.round(cm / 2.54);
-  return `${Math.floor(inches / 12)} ft ${inches % 12} in.`;
-}
 
 function summaryBlock(report, s) {
   const sum = report.summary;

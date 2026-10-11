@@ -7,13 +7,13 @@ import { daysBetween, todayStr } from '../../core/dates.js';
 import { currentValue } from '../../core/trends.js';
 import { lengthFromDisplay, lengthLabel, lengthToDisplay, roundTo } from '../../core/units.js';
 import {
-  activeFields, bmi, bmiCategory, bodyFatMissing, changesSinceBaseline, fieldLabel, latestValues,
+  activeFields, bmi, bmiCategory, bodyFatMissing, changesSinceBaseline, estimatesUsing, fieldLabel, latestValues,
   measureLevel, navyBodyFat, totalProgress,
 } from '../../core/measurements.js';
 import { field, numberInput, readNumber } from '../fields.js';
-import { fmt, fmtDate, fmtLength, inputNumber } from '../format.js';
+import { fmt, fmtDate, fmtHeight, fmtLength, fmtWeight, inputNumber } from '../format.js';
 import { lineChart } from '../chart.js';
-import { bodyFigure } from '../bodyFigure.js';
+import { bodyFigure, estimateIcon } from '../bodyFigure.js';
 import { weightPoints } from '../targetsFlow.js';
 import { checkMilestones, pruneMeasureMilestones } from '../milestones.js';
 
@@ -22,6 +22,7 @@ const UNUSUAL_CHANGE = 0.15;
 
 let editDate = null; // the date the entry form shows (null = today)
 let chartKey = null;
+let estimateFilter = 'all'; // which boxes the form shows: 'all', 'fat' (body fat) or 'bmi'
 
 export async function renderBody(view) {
   const s = state.settings;
@@ -34,7 +35,7 @@ export async function renderBody(view) {
   mount(view,
     h('header', { class: 'page-head' }, h('h1', {}, 'Body')),
     dueNotice(entries, today),
-    entryCard(entries, s, today, rerender),
+    entryCard(entries, points, s, today, rerender),
     progressCard(entries, s, latest),
     s.body.composition && compositionCard(s, latest, points, today),
     chartCard(entries, s, rerender),
@@ -52,7 +53,7 @@ function dueNotice(entries, today) {
     h('p', {}, `It’s been ${days} days since you last measured — time for this week’s measurements.`));
 }
 
-function entryCard(entries, s, today, rerender) {
+function entryCard(entries, points, s, today, rerender) {
   const unit = s.units.length;
   const fields = activeFields(s.body);
   const figure = bodyFigure();
@@ -70,6 +71,13 @@ function entryCard(entries, s, today, rerender) {
   };
   date.addEventListener('change', fill);
 
+  // With estimates on, colored icons mark what body fat and BMI use, and a filter can show just those.
+  const estimates = s.body.composition;
+  const sex = s.profile.sex;
+  const icons = (key) => (estimates ? estimatesUsing(key, sex).map(estimateIcon) : []);
+  const labelled = (text, key) => h('span', { class: 'label-with-icons' }, text, icons(key));
+  const filterable = []; // [element, key]
+
   const boxes = fields.map((f) => {
     const input = numberInput('', { 'aria-label': `${f.label} (${lengthLabel(unit)})` });
     input.addEventListener('focus', () => {
@@ -77,9 +85,45 @@ function entryCard(entries, s, today, rerender) {
       caption.replaceChildren(h('strong', {}, `${f.label}: `), f.hint);
     });
     inputs.set(f.key, input);
-    return field(f.label, h('div', { class: 'input-unit' }, input, h('span', {}, lengthLabel(unit))));
+    const el = field(labelled(f.label, f.key), h('div', { class: 'input-unit' }, input, h('span', {}, lengthLabel(unit))));
+    filterable.push([el, f.key]);
+    return el;
   });
   fill();
+
+  // Height and weight aren't measured here, but the estimates use them: shown read-only.
+  const weightKg = currentValue(points, today);
+  const infoRow = (key, label, value, note) => {
+    const el = h('div', { class: 'field info-field' },
+      h('span', { class: 'field-label' }, labelled(label, key)),
+      h('p', {}, h('strong', {}, value), ' ', h('small', { class: 'muted' }, note)));
+    filterable.push([el, key]);
+    return el;
+  };
+  const infoRows = estimates && [
+    infoRow('height', 'Height', fmtHeight(s.profile.heightCm, unit), s.profile.heightCm ? 'from your profile' : 'add it in Settings'),
+    infoRow('weight', 'Weight', weightKg == null ? '–' : fmtWeight(weightKg, s.units.weight), weightKg == null ? 'log a weigh-in' : '7-day average'),
+  ];
+  const bmiNote = h('p', { class: 'muted info-note' }, 'BMI needs no tape measurements: just your weight and height.');
+
+  const applyFilter = () => {
+    for (const [el, key] of filterable) {
+      el.hidden = estimateFilter !== 'all' && !estimatesUsing(key, sex).includes(estimateFilter);
+    }
+    bmiNote.hidden = estimateFilter !== 'bmi';
+  };
+  const filter = estimates && h('select', {
+    'aria-label': 'Show measurements for',
+    onChange: (e) => { estimateFilter = e.target.value; applyFilter(); },
+  },
+  h('option', { value: 'all', selected: estimateFilter === 'all' }, 'All'),
+  h('option', { value: 'fat', selected: estimateFilter === 'fat' }, 'Body fat'),
+  h('option', { value: 'bmi', selected: estimateFilter === 'bmi' }, 'BMI'));
+  const legend = estimates && h('ul', { class: 'estimate-legend' },
+    h('li', {}, estimateIcon('fat'), 'Body fat'),
+    h('li', {}, estimateIcon('bmi'), 'BMI'));
+  if (!estimates) estimateFilter = 'all';
+  applyFilter();
 
   const save = async (ev) => {
     ev.preventDefault();
@@ -109,8 +153,9 @@ function entryCard(entries, s, today, rerender) {
   return h('form', { class: 'card', onSubmit: save },
     h('h2', {}, 'Measure'),
     h('div', { class: 'measure-layout' },
-      h('div', { class: 'measure-figure' }, figure.el, caption),
-      h('div', { class: 'measure-fields' }, field('Date', date), boxes)),
+      h('div', { class: 'measure-figure' }, figure.el,
+        estimates && field('Show', filter), legend, caption),
+      h('div', { class: 'measure-fields' }, field('Date', date), boxes, infoRows, bmiNote)),
     h('button', { class: 'btn btn-primary btn-block', type: 'submit' }, 'Save Measurements'));
 }
 
@@ -196,13 +241,13 @@ function compositionCard(s, latest, points, today) {
     h('div', { class: 'stats-row' },
       h('div', { class: 'stat' },
         h('strong', {}, bf == null ? '–' : `${fmt(bf, 1)}%`),
-        h('small', {}, 'Est. body fat'),
+        h('small', { class: 'label-with-icons' }, estimateIcon('fat'), 'Est. body fat'),
         bf != null && bfBase != null && h('small', { class: 'muted' }, Math.abs(bf - bfBase) < 0.05
           ? 'Same as baseline'
           : `${bf > bfBase ? '+' : '−'}${fmt(Math.abs(bf - bfBase), 1)}% since baseline`)),
       h('div', { class: 'stat' },
         h('strong', {}, bmiValue == null ? '–' : fmt(bmiValue, 1)),
-        h('small', {}, 'BMI'),
+        h('small', { class: 'label-with-icons' }, estimateIcon('bmi'), 'BMI'),
         bmiValue != null && h('small', { class: 'muted' }, bmiCategory(bmiValue)))),
     bf == null && missing.length > 0 && h('p', {}, 'To estimate body fat, add: ', missing.join(', '), '.'),
     bmiValue == null && h('p', {}, 'BMI needs your height (in your profile) and a weigh-in.'),

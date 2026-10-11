@@ -16,6 +16,15 @@ const TAPES = {
   calfLeft: { x: 120, y: 350, rx: 15 },
 };
 
+// A small colored body icon marking what an estimate uses: 'fat' (light blue) or 'bmi' (light purple).
+export const ESTIMATE_LABELS = { fat: 'Body fat', bmi: 'BMI' };
+
+export const estimateIcon = (kind) =>
+  svg('svg', { class: `estimate-icon estimate-${kind}`, viewBox: '0 0 16 16', role: 'img', 'aria-label': `Used for ${ESTIMATE_LABELS[kind]}` },
+    svg('title', {}, `Used for ${ESTIMATE_LABELS[kind]}`),
+    svg('circle', { cx: 8, cy: 3.4, r: 2.5 }),
+    svg('path', { d: 'M8 6.6c-2.6 0-4.1 1.2-4.1 3.2v1.6h2.1v4h4v-4h2.1V9.8c0-2-1.5-3.2-4.1-3.2Z' }));
+
 export function bodyFigure() {
   const limb = (points, width) => svg('polyline', { class: 'figure-limb', points, 'stroke-width': width });
   const tape = svg('g', { class: 'figure-tape', hidden: true },

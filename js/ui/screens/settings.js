@@ -256,8 +256,9 @@ function waterSection() {
 // Body measurements: the Body tab and what it measures.
 function bodySection(rerender) {
   const b = state.settings.body;
-  const toggle = (key, title, description) => {
-    const box = h('input', { type: 'checkbox', checked: b[key] });
+  // required: checked and locked (neck is needed while the body-fat estimate is on).
+  const toggle = (key, title, description, required = false) => {
+    const box = h('input', { type: 'checkbox', checked: b[key] || required, disabled: required });
     box.addEventListener('change', async () => {
       await saveSettings({ ...state.settings, body: { ...state.settings.body, [key]: box.checked } });
       if (key === 'enabled') window.dispatchEvent(new Event('tabs-changed'));
@@ -271,7 +272,7 @@ function bodySection(rerender) {
       toggle('enabled', 'Track body measurements', 'Adds a Body tab for weekly tape measurements: chest, waist, hips, arms and thighs.'),
       b.enabled && h('div', { class: 'goal-options form-grid' },
         toggle('bothSides', 'Measure left and right sides', 'Arms, thighs and calves are measured on both sides instead of just the left.'),
-        toggle('neck', 'Measure neck'),
+        toggle('neck', 'Measure neck', b.composition && 'Required while body fat and BMI estimates are on.', b.composition),
         toggle('calves', 'Measure calves'),
         toggle('composition', 'Show body fat and BMI estimates',
           'Estimated body fat needs your waist, neck and height (and hips for women), so neck is measured while this is on. BMI uses your weight and height.'))));

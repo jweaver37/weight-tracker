@@ -221,6 +221,7 @@ input.invalid { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger)
   cursor: pointer;
 }
 .choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.choice:has(input:disabled) { opacity: 0.55; cursor: not-allowed; filter: grayscale(1); }
 .choice span { display: grid; }
 .choice small { color: var(--muted); }
 .choice input, .check input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); flex: none; }
@@ -363,6 +364,16 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 6px 
 .measure-table td.good { color: var(--good); font-weight: 600; }
 .measure-table tfoot th, .measure-table tfoot td { border-top: 2px solid var(--border); }
 .measure-history small { display: block; }
+/* Body fat (light blue) and BMI (light purple) markers */
+:root { --est-fat: #8fd0f5; --est-fat-line: #2f7fae; --est-bmi: #c4b1f7; --est-bmi-line: #6a4fc0; }
+.estimate-icon { width: 16px; height: 16px; flex: none; stroke-width: 0.9; }
+.estimate-fat { fill: var(--est-fat); stroke: var(--est-fat-line); }
+.estimate-bmi { fill: var(--est-bmi); stroke: var(--est-bmi-line); }
+.label-with-icons { display: inline-flex; align-items: center; gap: 4px; }
+.estimate-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 0.8rem; color: var(--muted); }
+.estimate-legend li { display: inline-flex; align-items: center; gap: 4px; }
+.info-field p { margin: 4px 0 0; }
+.info-note { margin: 0; font-size: 0.85rem; }
 .stat small.muted { font-size: 0.75rem; }
 
 /* Trophy Room */

@@ -125,6 +125,18 @@ export function navyBodyFat({ sex, heightCm, waistCm, neckCm, hipsCm }) {
   return Number.isFinite(bf) && bf > 2 && bf < 75 ? bf : null;
 }
 
+// Which estimates use a measurement: 'fat' (body fat) and/or 'bmi'. Tape measurements only feed
+// body fat; BMI uses weight and height. Hips count for women (and when sex isn't set yet).
+export function estimatesUsing(key, sex) {
+  switch (key) {
+    case 'neck': case 'waist': return ['fat'];
+    case 'hips': return sex === 'male' ? [] : ['fat'];
+    case 'height': return ['fat', 'bmi'];
+    case 'weight': return ['bmi'];
+    default: return [];
+  }
+}
+
 // What the body-fat estimate still needs, as labels (empty when it can be calculated).
 export function bodyFatMissing({ sex, heightCm, waistCm, neckCm, hipsCm }) {
   const missing = [];
