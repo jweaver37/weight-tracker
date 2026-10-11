@@ -9,7 +9,7 @@ export const MEASUREMENTS = [
   { key: 'neck', label: 'Neck', optional: true, hint: 'Just below the Adam’s apple, keeping the tape level.' },
   { key: 'chest', label: 'Chest', gain: true, hint: 'Around the fullest part, under your arms, after a normal breath out.' },
   { key: 'waist', label: 'Waist', hint: 'Level with your navel. Stand relaxed; don’t pull your stomach in.' },
-  { key: 'hips', label: 'Hips', hint: 'Around the widest part of your buttocks, feet together.' },
+  { key: 'hips', label: 'Hips', optional: true, hint: 'Around the widest part of your buttocks, feet together.' },
   { key: 'arm', label: 'Arm', side: true, gain: true, hint: 'Around the middle of your upper arm, relaxed and hanging down.' },
   { key: 'thigh', label: 'Thigh', side: true, gain: true, hint: 'Around the widest part, just below your buttocks.' },
   { key: 'calf', label: 'Calf', side: true, optional: true, gain: true, hint: 'Around the widest part of your calf, standing.' },
@@ -20,19 +20,27 @@ export function defaultBodySettings() {
     enabled: false,
     bothSides: false, // arms, thighs and calves: left only, or left and right
     neck: false,
+    hips: false, // always measured for women
     calves: false,
     composition: false, // show estimated body fat and BMI
   };
 }
 
-// Neck is needed for the body-fat estimate, so it's measured whenever that is on.
-const isOn = (m, body) => !m.optional || (m.key === 'neck' ? body.neck || body.composition : body.calves);
+// Optional measurements that are required anyway: neck while the body-fat estimate is on (it needs
+// it), and hips for women. Returns the reason, or null.
+export function requiredReason(key, body, sex) {
+  if (key === 'neck' && body.composition) return 'Required while body fat and BMI estimates are on.';
+  if (key === 'hips' && sex === 'female') return 'Required for women (your profile says female).';
+  return null;
+}
+
+const isOn = (m, body, sex) => !m.optional || Boolean(body[m.key === 'calf' ? 'calves' : m.key]) || requiredReason(m.key, body, sex) != null;
 
 // The boxes to show, in order: { key, label, base, side, hint }. Keys: 'waist', 'armLeft', 'armRight'…
-export function activeFields(body) {
+export function activeFields(body, sex = null) {
   const out = [];
   for (const m of MEASUREMENTS) {
-    if (!isOn(m, body)) continue;
+    if (!isOn(m, body, sex)) continue;
     if (!m.side) out.push({ key: m.key, label: m.label, base: m, side: null, hint: m.hint });
     else {
       out.push({ key: `${m.key}Left`, label: body.bothSides ? `Left ${m.label}` : m.label, base: m, side: 'left', hint: m.hint });
@@ -53,8 +61,8 @@ const byDate = (entries) => [...entries].sort((a, b) => (a.date < b.date ? -1 : 
 
 // The first entry with every active measurement filled in (on or after `from`), or null.
 // It becomes the measurement baseline: { date, values }.
-export function findMeasureBaseline(entries, body, from = null) {
-  const keys = activeFields(body).map((f) => f.key);
+export function findMeasureBaseline(entries, body, from = null, sex = null) {
+  const keys = activeFields(body, sex).map((f) => f.key);
   const first = byDate(entries).find((e) => (!from || e.date >= from) && keys.every((k) => e.values?.[k] > 0));
   return first ? { date: first.date, values: { ...first.values } } : null;
 }

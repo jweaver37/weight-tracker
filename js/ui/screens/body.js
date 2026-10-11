@@ -55,7 +55,7 @@ function dueNotice(entries, today) {
 
 function entryCard(entries, points, s, today, rerender) {
   const unit = s.units.length;
-  const fields = activeFields(s.body);
+  const fields = activeFields(s.body, s.profile.sex);
   const figure = bodyFigure();
   const caption = h('p', { class: 'figure-caption muted' }, 'Tap a box to see where to measure.');
   const date = h('input', { type: 'date', value: editDate ?? today, max: today });
@@ -193,7 +193,7 @@ function progressCard(entries, s, latest) {
   const baseline = s.measureBaseline;
   if (!baseline) {
     if (!entries.length) return null;
-    const needed = activeFields(s.body).map((f) => f.label);
+    const needed = activeFields(s.body, s.profile.sex).map((f) => f.label);
     return h('section', { class: 'card' },
       h('h2', {}, 'Baseline'),
       h('p', {}, `Your baseline is set from your first entry${s.baselineFrom ? ` on or after ${fmtDate(s.baselineFrom, { month: 'short', day: 'numeric' })} (when you started a new baseline)` : ''} with every measurement filled in: `,

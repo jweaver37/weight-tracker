@@ -18,6 +18,7 @@ import { todayStr } from '../../core/dates.js';
 import { looksLikeApiKey } from '../../data/usda.js';
 import { usageMeter } from '../usageMeter.js';
 import { FOLLOWED_DIETS } from '../../core/diet.js';
+import { requiredReason } from '../../core/measurements.js';
 
 // `focus` scrolls to a section, e.g. #/settings/bmr from the Today screen.
 export async function renderSettings(view, { onDataReplaced, focus }) {
@@ -256,6 +257,7 @@ function waterSection() {
 // Body measurements: the Body tab and what it measures.
 function bodySection(rerender) {
   const b = state.settings.body;
+  const sex = state.settings.profile.sex;
   // required: checked and locked (neck is needed while the body-fat estimate is on).
   const toggle = (key, title, description, required = false) => {
     const box = h('input', { type: 'checkbox', checked: b[key] || required, disabled: required });
@@ -269,10 +271,11 @@ function bodySection(rerender) {
   return h('section', { class: 'card' },
     h('h2', {}, 'Body measurements'),
     h('div', { class: 'form-grid' },
-      toggle('enabled', 'Track body measurements', 'Adds a Body tab for weekly tape measurements: chest, waist, hips, arms and thighs.'),
+      toggle('enabled', 'Track body measurements', 'Adds a Body tab for weekly tape measurements: chest, waist, arms and thighs, plus any of the options below.'),
       b.enabled && h('div', { class: 'goal-options form-grid' },
         toggle('bothSides', 'Measure left and right sides', 'Arms, thighs and calves are measured on both sides instead of just the left.'),
-        toggle('neck', 'Measure neck', b.composition && 'Required while body fat and BMI estimates are on.', b.composition),
+        toggle('neck', 'Measure neck', requiredReason('neck', b, sex), Boolean(requiredReason('neck', b, sex))),
+        toggle('hips', 'Measure hips', requiredReason('hips', b, sex), Boolean(requiredReason('hips', b, sex))),
         toggle('calves', 'Measure calves'),
         toggle('composition', 'Show body fat and BMI estimates',
           'Estimated body fat needs your waist, neck and height (and hips for women), so neck is measured while this is on. BMI uses your weight and height.'))));

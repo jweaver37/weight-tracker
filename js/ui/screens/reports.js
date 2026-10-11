@@ -248,7 +248,7 @@ function measurementsBlock(measurements, points, s) {
   const unit = s.units.length;
   const rows = [...measurements].sort((a, b) => (a.date < b.date ? -1 : 1));
   const seen = new Set(rows.flatMap((e) => Object.keys(e.values ?? {})));
-  const order = [...activeFields(s.body).map((f) => f.key), ...seen];
+  const order = [...activeFields(s.body, s.profile.sex).map((f) => f.key), ...seen];
   const keys = [...new Set(order)].filter((k) => seen.has(k));
   if (!rows.length) {
     return h('section', { class: 'report-section' }, h('h2', {}, 'Body measurements'), h('p', {}, 'No measurements in this period.'));

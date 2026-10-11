@@ -52,7 +52,7 @@ export async function pruneMeasureMilestones() {
 async function establishMeasureBaseline(measurements) {
   const s = state.settings;
   if (!s.body.enabled || s.measureBaseline) return null;
-  const b = findMeasureBaseline(measurements, s.body, s.baselineFrom);
+  const b = findMeasureBaseline(measurements, s.body, s.baselineFrom, s.profile.sex);
   if (!b) return null;
   await saveSettings({ ...state.settings, measureBaseline: b });
   return { key: 'measureBaseline', type: 'measureBaseline', date: b.date, values: b.values };
