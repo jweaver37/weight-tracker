@@ -106,6 +106,20 @@ small { font-size: 0.82rem; }
 .card-head h2 { margin: 0; }
 .page-head { padding: 4px 0 12px; }
 
+/* USDA food search (from the Add food form) */
+.btn-search { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.search-hint { display: block; margin: -4px 0 4px; }
+.search-row { display: flex; gap: 8px; }
+.search-row input { flex: 1; min-width: 0; }
+.search-status { margin: 0; font-size: 0.9rem; }
+.search-results { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 55vh; overflow-y: auto; }
+.search-results .result {
+  width: 100%; text-align: left; display: grid; gap: 2px; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font: inherit; color: inherit;
+}
+.search-results .result:hover, .search-results .result:focus-visible { border-color: var(--accent); }
+.search-results .result small { font-size: 0.8rem; }
+
 /* Weight-loss pace: [x].[x] lbs per week */
 .pace-input { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .pace-input select.digit { width: 4.2em; text-align: center; font-size: 1.15rem; font-variant-numeric: tabular-nums; }

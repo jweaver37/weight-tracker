@@ -74,6 +74,12 @@ export async function searchFoods(query, apiKey, pageSize = 25) {
   return result.foods ?? [];
 }
 
+// One page of a search, for browsing results: { foods, totalHits }. pageNumber starts at 1.
+export async function searchFoodsPage(query, apiKey, { pageSize = 50, pageNumber = 1 } = {}) {
+  const result = await call('foods/search', { query, dataType: DATA_TYPES, pageSize, pageNumber }, apiKey);
+  return { foods: result.foods ?? [], totalHits: result.totalHits ?? 0 };
+}
+
 // Full details (including portion weights) for several foods in one request.
 export function getFoods(fdcIds, apiKey) {
   if (!fdcIds.length) return Promise.resolve([]);

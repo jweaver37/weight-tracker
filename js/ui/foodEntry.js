@@ -8,6 +8,7 @@ import * as repo from '../data/repo.js';
 import { fmt, inputNumber } from './format.js';
 import { state } from './state.js';
 import { volumeFromDisplay, volumeLabel, volumeToDisplay } from '../core/units.js';
+import { searchUsdaFood } from './foodSearch.js';
 
 // Edits a food without saving it. `meal` shows a meal picker when given.
 // Resolves { action: 'save', food }, { action: 'delete' } or undefined (cancelled).
@@ -47,6 +48,30 @@ export function editFood({ food, customFields, meal, title, amountLabel = 'Servi
   const microRows = NUTRIENTS.filter((n) => n.group === 'micro').map((n) => nutrientRow(n.key, n.label, n.unit, f.nutrients[n.key]));
   const microFilled = NUTRIENTS.some((n) => n.group === 'micro' && f.nutrients[n.key] != null);
   const customRows = customFields.map((c) => nutrientRow(`custom:${c.id}`, c.name, c.unit, f.custom?.[c.id]));
+
+  const microDetails = h('details', { open: microFilled }, h('summary', {}, 'Vitamins & minerals'), h('div', { class: 'nutrient-list' }, microRows));
+
+  // Search USDA fills the form from a food and amount chosen there; everything stays editable.
+  let usdaSource = f.source ?? null;
+  const fillFromUsda = async () => {
+    const found = await searchUsdaFood(name.value.trim());
+    if (!found) return;
+    name.value = found.name;
+    brand.value = '';
+    servingSize.value = found.servingSize;
+    servings.value = '1';
+    for (const [key, input] of nutrientInputs) {
+      if (key.startsWith('custom:')) continue;
+      const v = found.nutrients[key];
+      input.value = v == null ? '' : inputNumber(v, 2);
+      input.classList.remove('invalid');
+    }
+    if (NUTRIENTS.some((n) => n.group === 'micro' && found.nutrients[n.key] != null)) microDetails.open = true;
+    if (isDrink() && found.volumeMl) volume.value = inputNumber(volumeToDisplay(found.volumeMl, volumeUnit), 1);
+    usdaSource = found.source;
+    updatePreview();
+  };
+  const searchButton = h('button', { class: 'btn btn-search btn-block', type: 'button', onClick: fillFromUsda }, 'Search USDA');
 
   const preview = h('p', { class: 'entry-preview' });
   const updatePreview = () => {
@@ -96,6 +121,7 @@ export function editFood({ food, customFields, meal, title, amountLabel = 'Servi
           servingSize: servingSize.value.trim() || null,
           nutrients,
           custom,
+          source: usdaSource,
           ...(mealSelect && drink),
         },
       });
@@ -107,6 +133,8 @@ export function editFood({ food, customFields, meal, title, amountLabel = 'Servi
 
     const form = h('form', { class: 'dialog-body', onSubmit: (ev) => { ev.preventDefault(); save(); }, onInput: updatePreview },
       h('h2', {}, title),
+      searchButton,
+      h('small', { class: 'muted search-hint' }, 'Look up a food in the USDA database to fill in its nutrition, or type it in below.'),
       field('Food name', name),
       field('Brand', brand),
       h('div', { class: 'input-row' }, mealSelect && field('Meal', mealSelect), field(amountLabel, servings)),
@@ -114,7 +142,7 @@ export function editFood({ food, customFields, meal, title, amountLabel = 'Servi
       drinkFields,
       h('h3', {}, 'Nutrition Facts (per serving)'),
       h('div', { class: 'nutrient-list' }, labelRows),
-      h('details', { open: microFilled }, h('summary', {}, 'Vitamins & minerals'), h('div', { class: 'nutrient-list' }, microRows)),
+      microDetails,
       customRows.length > 0 && h('div', {}, h('h3', {}, 'Custom fields'), h('div', { class: 'nutrient-list' }, customRows)),
       preview,
       errorBox,

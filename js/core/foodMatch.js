@@ -126,6 +126,29 @@ function portionMl(p) {
   return null;
 }
 
+// Amount choices for logging a food picked from a USDA search: each of the food's own portions
+// ("1 cup, sliced (150 g)", "1 medium (118 g)") plus 100 g, as { label, grams, ml }. ml is the
+// volume when the portion is a cup/spoon/fl oz measure (for drinks). Reference amounts (RACC) and
+// duplicates are left out.
+export function portionChoices(portions = []) {
+  const fmt = (n) => String(Math.round(n * 100) / 100);
+  const seen = new Set();
+  const out = [];
+  for (const p of portions) {
+    if (!(p.gramWeight > 0) || /racc/i.test(portionText(p))) continue;
+    const unitName = p.measureUnit?.name && p.measureUnit.name !== 'undetermined' ? p.measureUnit.name : '';
+    let text = (p.portionDescription || [unitName, p.modifier].filter(Boolean).join(' ')).trim();
+    if (!text) continue;
+    if (!/^\d/.test(text)) text = `${fmt(p.amount || 1)} ${text}`;
+    const label = `${text} (${fmt(p.gramWeight)} g)`;
+    if (seen.has(label.toLowerCase())) continue;
+    seen.add(label.toLowerCase());
+    out.push({ label, grams: p.gramWeight, ml: portionMl(p) });
+  }
+  out.push({ label: '100 g', grams: 100, ml: null });
+  return out;
+}
+
 // Typical weights (g) of foods recipes count rather than measure, from USDA reference portions.
 // Used when the matched USDA entry has no matching portion (e.g. "2 large eggs" matched to an entry
 // without a "large" measure).
