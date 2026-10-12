@@ -59,7 +59,7 @@ function weightCard(points, s, today) {
       b
         ? h('p', { class: 'baseline-lines' },
           h('span', {}, 'Average so far: ', h('strong', {}, w(b.weightKg))),
-          h('span', { class: 'nowrap' }, `Window ends ${short(b.endDate)}`))
+          h('span', { class: 'nowrap muted' }, `Window ends ${short(b.endDate)}`))
         : h('p', {}, h('a', { href: '#/weight' }, 'Log a weigh-in'), ' to start.'),
       avg != null && h('p', {}, '7-day average: ', h('strong', {}, w(avg))),
       h('p', { class: 'muted' }, BASELINE_REMINDER));
