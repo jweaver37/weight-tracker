@@ -335,6 +335,8 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 6px 
 
 /* Baseline and weight facts (Goals tab) */
 .baseline-dots { display: flex; gap: 8px; margin: 4px 0 10px; }
+.baseline-lines { display: grid; gap: 2px; }
+.nowrap { white-space: nowrap; }
 .baseline-dots span { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--accent); }
 .baseline-dots span.on { background: var(--accent); }
 .weight-facts { margin: 0; display: grid; gap: 10px; }

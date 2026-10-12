@@ -57,7 +57,9 @@ function weightCard(points, s, today) {
       h('div', { class: 'baseline-dots', role: 'img', 'aria-label': `${count} of ${BASELINE_WEIGH_INS} weigh-ins` },
         Array.from({ length: BASELINE_WEIGH_INS }, (_, i) => h('span', { class: i < count ? 'on' : '' }))),
       b
-        ? h('p', {}, `Average so far: `, h('strong', {}, w(b.weightKg)), ` · Window ends ${short(b.endDate)}`)
+        ? h('p', { class: 'baseline-lines' },
+          h('span', {}, 'Average so far: ', h('strong', {}, w(b.weightKg))),
+          h('span', { class: 'nowrap' }, `Window ends ${short(b.endDate)}`))
         : h('p', {}, h('a', { href: '#/weight' }, 'Log a weigh-in'), ' to start.'),
       avg != null && h('p', {}, '7-day average: ', h('strong', {}, w(avg))),
       h('p', { class: 'muted' }, BASELINE_REMINDER));
