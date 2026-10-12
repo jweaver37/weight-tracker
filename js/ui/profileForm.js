@@ -1,11 +1,11 @@
 // Profile and targets forms, shared by first-time setup and Settings.
 import { h } from './dom.js';
 import { field, heightInput, numberInput, readNumber, selectInput, weightInput } from './fields.js';
-import { ACTIVITY_LEVELS, CALCULATED_KEYS, DEFAULT_MIN_CALORIES, LOSS_RATES_LB, profileAge } from '../core/targets.js';
+import { ACTIVITY_LEVELS, CALCULATED_KEYS, DEFAULT_MIN_CALORIES, MAX_LOSS_RATE, profileAge } from '../core/targets.js';
 import { nutrientByKey } from '../core/nutrients.js';
 import { lbToKg, roundTo } from '../core/units.js';
 import { todayStr } from '../core/dates.js';
-import { fmtDate, fmtWeight, inputNumber } from './format.js';
+import { fmtDate, inputNumber } from './format.js';
 
 const WEIGHT_UNITS = [{ value: 'lb', label: 'lbs' }, { value: 'kg', label: 'kg' }];
 const LENGTH_UNITS = [{ value: 'in', label: 'inches' }, { value: 'cm', label: 'cm' }];
@@ -126,7 +126,45 @@ export function profileForm(settings, { currentWeightKg, askCurrentWeight = fals
   };
 }
 
-// read() → { targets, errors }. `weightUnit()` labels the loss-rate options in the chosen unit.
+// Weight-loss pace as two digit boxes, [x].[x] lbs (or kg) per week, each a 0–9 picker, capped at the
+// usual maximum (2.0 lbs / 0.9 kg). read() → kg per week.
+function paceInput(kgPerWeek, weightUnit) {
+  const digits = (n) => Array.from({ length: n + 1 }, (_, i) => ({ value: String(i), label: String(i) }));
+  const whole = selectInput([], '', { class: 'digit', 'aria-label': 'Pace, whole number' });
+  const tenth = selectInput(digits(9), '', { class: 'digit', 'aria-label': 'Pace, tenths' });
+  const unitLabel = h('span', {});
+  const max = () => MAX_LOSS_RATE[weightUnit()];
+
+  // At the top whole number, only tenths up to the cap can be chosen (2.0 lbs, 0.9 kg).
+  const limitTenths = () => {
+    const capWhole = Math.floor(max());
+    const capTenth = Math.round((max() - capWhole) * 10);
+    for (const o of tenth.options) o.disabled = Number(whole.value) === capWhole && Number(o.value) > capTenth;
+    if (tenth.selectedOptions[0]?.disabled) tenth.value = String(capTenth);
+  };
+  const show = (kg) => {
+    const unit = weightUnit();
+    whole.replaceChildren(...digits(Math.floor(max())).map((o) => h('option', { value: o.value }, o.label)));
+    const v = Math.min(max(), Math.max(0, roundTo(unit === 'kg' ? kg : kg / lbToKg(1), 1)));
+    whole.value = String(Math.floor(v + 1e-9));
+    tenth.value = String(Math.round((v - Math.floor(v + 1e-9)) * 10));
+    unitLabel.textContent = `${unit === 'kg' ? 'kg' : 'lbs'} per week`;
+    limitTenths();
+  };
+  const read = () => {
+    const v = Number(whole.value) + Number(tenth.value) / 10;
+    return weightUnit() === 'kg' ? v : lbToKg(v);
+  };
+  whole.addEventListener('change', limitTenths);
+  show(kgPerWeek);
+  return {
+    el: h('div', { class: 'pace-input' }, whole, h('span', { class: 'digit-dot', 'aria-hidden': 'true' }, '.'), tenth, unitLabel),
+    read,
+    refreshUnit: (kg) => show(kg), // call after the unit changes, with read() taken before it
+  };
+}
+
+// read() → { targets, errors }. `weightUnit()` gives the unit the pace is entered in.
 export function targetsForm(settings, { weightUnit, advanced = false } = {}) {
   const t = settings.targets;
   const modeName = `target-mode-${Math.random().toString(36).slice(2)}`;
@@ -135,19 +173,17 @@ export function targetsForm(settings, { weightUnit, advanced = false } = {}) {
       h('input', { type: 'radio', name: modeName, value, checked: t.mode === value }),
       h('span', {}, h('strong', {}, label), h('small', {}, hint)));
 
-  const rateOptions = () => LOSS_RATES_LB.map((lb) => ({
-    value: String(lb),
-    label: `${fmtWeight(lbToKg(lb), weightUnit(), weightUnit() === 'kg' ? 2 : 1)} per week`,
-  }));
-  const currentRateLb = String(roundTo(t.lossRateKgPerWeek / lbToKg(1), 1));
-  const rate = selectInput(rateOptions(), currentRateLb);
+  // Units the pace was last shown in, so switching lb ↔ kg converts what's entered.
+  let paceUnit = weightUnit();
+  const rate = paceInput(t.lossRateKgPerWeek, () => paceUnit);
   const minCalories = numberInput(t.minCalories ?? '', { inputmode: 'numeric', placeholder: `${DEFAULT_MIN_CALORIES.female} (women) / ${DEFAULT_MIN_CALORIES.male} (men)` });
   const protein = numberInput(inputNumber(t.proteinGPerKg, 2));
   let threshold = weightInput(t.recalcThresholdKg, weightUnit());
   const thresholdSlot = h('div', {}, threshold.el);
 
   const calculated = h('div', { class: 'form-grid' },
-    field('Weight-loss pace', rate),
+    field('Weight-loss pace', rate.el,
+      'Up to 2 lbs (0.9 kg) a week, the most usually recommended. Choose 0.0 to keep your weight steady. Talk to your doctor before aiming for faster loss.'),
     advanced && field('Minimum daily calories', minCalories, 'Calculated calories never go below this. Leave blank for the standard minimum.'),
     advanced && field('Protein (grams per kg of body weight)', protein, 'Uses goal weight when it is lower than current weight.'),
     advanced && field('Recalculate when 7-day average drops by', thresholdSlot));
@@ -177,14 +213,15 @@ export function targetsForm(settings, { weightUnit, advanced = false } = {}) {
   return {
     el,
     refreshUnits: () => {
-      const selected = rate.value;
-      rate.replaceChildren(...rateOptions().map((o) => h('option', { value: o.value, selected: o.value === selected }, o.label)));
+      const kg = rate.read();
+      paceUnit = weightUnit();
+      rate.refreshUnit(kg);
       threshold = weightInput(threshold.read(), weightUnit());
       thresholdSlot.replaceChildren(threshold.el);
     },
     read: () => {
       const errors = [];
-      const next = { ...t, mode: mode(), lossRateKgPerWeek: lbToKg(Number(rate.value)) };
+      const next = { ...t, mode: mode(), lossRateKgPerWeek: rate.read() };
       if (advanced) {
         const min = readNumber(minCalories);
         if (!min.empty && min.value == null) errors.push('Minimum calories must be a number.');

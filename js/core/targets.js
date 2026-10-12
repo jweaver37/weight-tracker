@@ -10,7 +10,11 @@ export const ACTIVITY_LEVELS = [
   { key: 'active', label: 'Very active (physically demanding job)', factor: 1.725 },
 ];
 
-export const LOSS_RATES_LB = [0.5, 1, 1.5, 2];
+// Weight-loss pace, per week: 0 (maintain) up to the usual medical maximum of 2 lb. Entered in
+// tenths; in kg the cap is 0.9 (just under 2 lb).
+export const MAX_LOSS_RATE = { lb: 2, kg: 0.9 };
+export const MAX_LOSS_RATE_KG = 2 * 0.45359237;
+export const clampLossRate = (kgPerWeek) => Math.min(MAX_LOSS_RATE_KG, Math.max(0, kgPerWeek || 0));
 export const KCAL_PER_KG = 3500 / 0.45359237; // ~3,500 kcal per lb of body weight
 export const DEFAULT_MIN_CALORIES = { female: 1200, male: 1500 };
 
@@ -44,7 +48,7 @@ export function calculateTargets({ sex, age, heightCm, weightKg, goalWeightKg, a
   const level = ACTIVITY_LEVELS.find((a) => a.key === activity) ?? ACTIVITY_LEVELS[0];
   const bmr = mifflinStJeor({ sex, weightKg, heightCm, age });
   const maintenance = bmr * level.factor;
-  const deficit = (lossRateKgPerWeek * KCAL_PER_KG) / 7;
+  const deficit = (clampLossRate(lossRateKgPerWeek) * KCAL_PER_KG) / 7;
   const unclamped = maintenance - deficit;
   const floor = minCaloriesFor(sex, minCalories);
   const calories = Math.round(Math.max(floor, unclamped));

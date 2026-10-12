@@ -106,6 +106,12 @@ small { font-size: 0.82rem; }
 .card-head h2 { margin: 0; }
 .page-head { padding: 4px 0 12px; }
 
+/* Weight-loss pace: [x].[x] lbs per week */
+.pace-input { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pace-input select.digit { width: 4.2em; text-align: center; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.digit-dot { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+.pace-input > span:last-child { color: var(--muted); margin-left: 4px; }
+
 /* Settings groups: a header row with + / − that opens to the group's cards */
 .settings-group { margin-bottom: 10px; }
 .settings-group > summary {

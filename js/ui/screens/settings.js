@@ -145,7 +145,9 @@ function calorieBreakdown(s, b) {
       manual
         ? step('Your target', target ? kcal(target) : '–', 'You entered your own targets, so the steps above are for reference only.', 'total')
         : [
-          step(`− Weight-loss pace (${pace} a week)`, `− ${kcal(b.deficit)}`, 'A pound of body weight is about 3,500 kcal (7,700 per kg), spread over the 7 days.'),
+          s.targets.lossRateKgPerWeek > 0
+            ? step(`− Weight-loss pace (${pace} a week)`, `− ${kcal(b.deficit)}`, 'A pound of body weight is about 3,500 kcal (7,700 per kg), spread over the 7 days.')
+            : step('− Weight-loss pace (0, keep my weight steady)', '− 0 kcal', 'Your target is your maintenance calories.'),
           step('= Daily calorie target', kcal(b.values.calories),
             b.floorApplied
               ? `Raised to your minimum of ${kcal(b.floor)} — calories are never set lower than that.`
