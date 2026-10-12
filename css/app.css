@@ -106,6 +106,25 @@ small { font-size: 0.82rem; }
 .card-head h2 { margin: 0; }
 .page-head { padding: 4px 0 12px; }
 
+/* Settings groups: a header row with + / − that opens to the group's cards */
+.settings-group { margin-bottom: 10px; }
+.settings-group > summary {
+  list-style: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; min-height: 56px;
+}
+.settings-group > summary::-webkit-details-marker { display: none; }
+.settings-group[open] > summary { border-color: var(--accent); background: var(--accent-soft); margin-bottom: 10px; }
+.group-title { display: grid; gap: 2px; min-width: 0; }
+.group-title strong { font-size: 1.05rem; }
+.group-title small { color: var(--muted); font-size: 0.85rem; }
+.group-toggle { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--accent); color: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: 1.2rem; line-height: 1; }
+.group-toggle::before { content: '+'; }
+.settings-group[open] .group-toggle::before { content: '−'; }
+.group-body { padding-left: 8px; border-left: 3px solid var(--accent-soft); }
+.group-body > .card:last-child { margin-bottom: 4px; }
+
 /* Tab bar */
 .tabbar {
   position: fixed;

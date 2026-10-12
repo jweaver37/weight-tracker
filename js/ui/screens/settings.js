@@ -31,20 +31,51 @@ export async function renderSettings(view, { onDataReplaced, focus }) {
   const rerender = () => renderSettings(view, { onDataReplaced });
   mount(view,
     h('header', { class: 'page-head' }, h('h1', {}, 'Settings')),
-    profileSection(rerender, breakdown),
-    waterSection(),
-    dietSection(rerender),
-    bodySection(rerender),
-    goalsSection(rerender),
-    nutrientsSection(),
-    customFieldsSection(customFields, rerender),
-    activitiesSection(activities, rerender),
-    foodDatabaseSection(rerender),
-    backupSection(rerender, onDataReplaced),
+    group('profile', 'Profile & Targets', 'Profile, units, BMR and daily targets',
+      profileSection(rerender, breakdown)),
+    group('food', 'Food & Nutrition', 'Nutrients shown, custom fields, water and your diet',
+      nutrientsSection(), customFieldsSection(customFields, rerender), waterSection(), dietSection(rerender)),
+    group('body', 'Body & Workouts', 'Body measurements and your workout activities',
+      bodySection(rerender), activitiesSection(activities, rerender)),
+    group('goals', 'Goals & Milestones', 'Baseline, goals and weekly rings',
+      goalsSection(rerender)),
+    group('usda', 'Food Database', 'USDA key and lookups',
+      foodDatabaseSection(rerender)),
+    group('data', 'Data & Backup', 'Export, import and backup reminders',
+      backupSection(rerender, onDataReplaced)),
+    // The spec keeps the health disclaimer always visible in Settings, so it isn't in a group.
     disclaimerSection(),
   );
-  // After the router's scroll-to-top.
-  if (focus) setTimeout(() => document.getElementById(focus)?.scrollIntoView({ block: 'start' }), 0);
+  // After the router's scroll-to-top. A link to a setting opens its group first.
+  if (focus) {
+    setTimeout(() => {
+      const target = document.getElementById(focus);
+      const details = target?.closest('details');
+      if (details && !details.open) details.open = true;
+      target?.scrollIntoView({ block: 'start' });
+    }, 0);
+  }
+}
+
+// Settings groups open and close with + / −; which are open is remembered on this device.
+const OPEN_KEY = 'settings-open-groups';
+function openGroups() {
+  try { return new Set(JSON.parse(localStorage.getItem(OPEN_KEY) || '[]')); } catch { return new Set(); }
+}
+function rememberGroup(id, open) {
+  const ids = openGroups();
+  if (open) ids.add(id); else ids.delete(id);
+  try { localStorage.setItem(OPEN_KEY, JSON.stringify([...ids])); } catch { /* not remembered */ }
+}
+
+function group(id, title, summary, ...sections) {
+  const details = h('details', { class: 'settings-group', id: `group-${id}`, open: openGroups().has(id) },
+    h('summary', {},
+      h('span', { class: 'group-title' }, h('strong', {}, title), h('small', {}, summary)),
+      h('span', { class: 'group-toggle', 'aria-hidden': 'true' })),
+    h('div', { class: 'group-body' }, sections));
+  details.addEventListener('toggle', () => rememberGroup(id, details.open));
+  return details;
 }
 
 function profileSection(rerender, breakdown) {
