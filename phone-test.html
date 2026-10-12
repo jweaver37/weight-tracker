@@ -103,7 +103,7 @@ textarea { width: 100%; min-height: 64px; border: 1px solid var(--line); border-
 
   <div class="who">
     <label for="tester">Your name<input id="tester" type="text" autocomplete="given-name" placeholder="First name"></label>
-    <label for="device">Phone<select id="device"><option value="iphone">iPhone 18 Pro</option><option value="s26">S26 Ultra</option></select></label>
+    <label for="device">Phone<select id="device"><option value="iphone">iPhone 18 Pro</option><option value="iphone14">iPhone 14</option><option value="s26">S26 Ultra</option></select></label>
   </div>
 
   <main id="groups"></main>
@@ -171,7 +171,7 @@ const GROUPS = [
     ['update', 'Picks up a new version', 'After a fix is published: close the app fully and reopen it.'],
   ] },
 ];
-const DEVICES = { iphone: 'iPhone 18 Pro', s26: 'S26 Ultra' };
+const DEVICES = { iphone: 'iPhone 18 Pro', iphone14: 'iPhone 14', s26: 'S26 Ultra' };
 const STATUSES = [['pass', 'Pass'], ['issue', 'Issue'], ['skip', 'N/A']];
 const LABEL = { pass: 'Pass', issue: 'Issue', skip: 'N/A' };
 const TOTAL = GROUPS.reduce((n, g) => n + g.items.length, 0);
