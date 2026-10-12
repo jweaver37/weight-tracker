@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Standalone Phase 1 phone-test checklist (no account needed). Results stay in this browser until
+     the tester sends them. Loads nothing from other sites and contacts no server. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title>Phase 1 Phone Test</title>
+<style>
+:root {
+  --bg: #f3f6f4; --surface: #ffffff; --ink: #17231d; --muted: #5b6b63; --line: #d9e2dd;
+  --accent: #1f7a55; --pass: #1f7a55; --issue: #b4461f; --issue-soft: #fbe5dc; --skip: #6b7280; --focus: #0b63ce;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111814; --surface: #19221d; --ink: #e6efe9; --muted: #9db0a6; --line: #2c3a33;
+    --accent: #5cc496; --pass: #5cc496; --issue: #f08a62; --issue-soft: #3a241b; --skip: #a3abb6; --focus: #7db4ff;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; padding-inline: 16px; padding-block: 0 48px; }
+.wrap { max-width: 640px; margin: 0 auto; display: grid; gap: 20px; }
+h1, h2 { margin: 0; text-wrap: balance; }
+h1 { font-size: 1.5rem; line-height: 1.2; }
+h2 { font-size: 1.15rem; }
+button, textarea, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 14px 10px; margin-inline: -16px; padding-inline: 16px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.progress-text { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.9rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.progress-text strong { color: var(--ink); }
+.bar { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; display: flex; }
+.bar span { display: block; height: 100%; }
+.bar .p { background: var(--pass); } .bar .i { background: var(--issue); } .bar .s { background: var(--skip); }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: 0.85rem; cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--issue); background: var(--issue-soft); color: var(--issue); font-weight: 700; }
+.send { border: 0; background: var(--accent); color: var(--surface); border-radius: 10px; padding: 8px 16px; font-weight: 700; cursor: pointer; }
+
+.intro { color: var(--muted); font-size: 0.95rem; margin: 0; }
+.who { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+.who label { display: grid; gap: 4px; font-size: 0.85rem; color: var(--muted); font-weight: 700; min-width: 0; }
+.who input, .who select { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 8px 10px; width: 100%; }
+
+section.group { display: grid; gap: 10px; }
+.group-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.count { font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.items { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.item { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 10px; }
+.item[data-status="pass"] { border-color: var(--pass); }
+.item[data-status="issue"] { border-color: var(--issue); background: var(--issue-soft); }
+.item[data-status="skip"] { opacity: 0.75; }
+.item-text { display: grid; gap: 2px; min-width: 0; }
+.item-text small { color: var(--muted); font-size: 0.85rem; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.status { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 6px 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer; min-height: 36px; }
+.status.pass[aria-pressed="true"] { background: var(--pass); border-color: var(--pass); color: var(--surface); }
+.status.issue[aria-pressed="true"] { background: var(--issue); border-color: var(--issue); color: var(--surface); }
+.status.skip[aria-pressed="true"] { background: var(--skip); border-color: var(--skip); color: var(--surface); }
+.note-btn { margin-left: auto; border: 0; background: none; color: var(--accent); font-size: 0.85rem; font-weight: 700; cursor: pointer; padding: 6px 4px; }
+textarea { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 8px 10px; resize: vertical; font-size: 0.95rem; }
+.section-notes { display: grid; gap: 4px; }
+.section-notes label { font-size: 0.85rem; color: var(--muted); font-weight: 700; }
+.empty { color: var(--muted); font-size: 0.9rem; margin: 0; }
+
+.sheet { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+.sheet p { margin: 0; font-size: 0.9rem; color: var(--muted); }
+.sheet textarea { min-height: 180px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.8rem; }
+.sheet .row button { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 6px 12px; font-weight: 700; cursor: pointer; }
+.status-line { font-size: 0.85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="row">
+      <h1>Phase 1 Phone Test</h1>
+      <button type="button" class="send" id="send">Send results</button>
+    </div>
+    <div class="progress-text" id="progress-text"></div>
+    <div class="bar" aria-hidden="true"><span class="p" id="bar-p"></span><span class="i" id="bar-i"></span><span class="s" id="bar-s"></span></div>
+    <div class="row">
+      <button type="button" class="chip" id="issues-only" aria-pressed="false">Issues only</button>
+      <span class="status-line" id="status-line">Saved on this phone</span>
+    </div>
+  </header>
+
+  <section class="sheet" id="sheet" hidden aria-labelledby="sheet-title">
+    <h2 id="sheet-title">Your results</h2>
+    <p>Sharing wasn’t available, so copy this text and send it to Josh by text or email.</p>
+    <textarea id="sheet-text" readonly aria-label="Results to send"></textarea>
+    <div class="row"><button type="button" id="copy">Copy</button><button type="button" id="close-sheet">Close</button></div>
+  </section>
+
+  <p class="intro">Open the app at <strong>jweaver37.github.io/weight-tracker</strong> (Share → Add to Home Screen, then open it from that icon). Work through each section below and mark each check <strong>Pass</strong>, <strong>Issue</strong> or <strong>N/A</strong>. Add a note for anything that looks wrong, is hard to use, or you’d change. Your answers stay on this phone until you tap <strong>Send results</strong>.</p>
+
+  <div class="who">
+    <label for="tester">Your name<input id="tester" type="text" autocomplete="given-name" placeholder="First name"></label>
+    <label for="device">Phone<select id="device"><option value="iphone">iPhone 18 Pro</option><option value="s26">S26 Ultra</option></select></label>
+  </div>
+
+  <main id="groups"></main>
+</div>
+
+<script>
+const GROUPS = [
+  { id: 'setup', title: 'Getting started', items: [
+    ['install', 'Install from the home screen icon', 'Chrome: ⋮ → Install app. iPhone: Share → Add to Home Screen. Always open it from the icon.'],
+    ['disclaimer', 'Disclaimer and profile setup are clear', 'Wording, required fields, the age options, units.'],
+    ['firstweek', 'The "Your first week" note makes sense', 'It explains the 7 weigh-ins that set your baseline.'],
+    ['firstweigh', 'First weigh-in saves', 'Weight tab, or during setup.'],
+  ] },
+  { id: 'today', title: 'Today', items: [
+    ['food', 'Log food in each meal', 'Breakfast, lunch, dinner and snacks; edit and delete an entry.'],
+    ['custom', 'Log a custom field', 'Set one up in Settings first if needed.'],
+    ['water', 'Water: quick-add, custom amount and undo', ''],
+    ['drink', 'A drink that counts toward water', ''],
+    ['workout', 'Log a workout', 'Its calories should be added to the day’s budget.'],
+    ['totals', 'Totals and target bars add up', 'Calories, protein, water.'],
+  ] },
+  { id: 'weight', title: 'Weight', items: [
+    ['weighin', 'Add a weigh-in', ''],
+    ['typo', 'Typo check', 'Enter a weight far from your real one (like 145 for 245): you should be asked “Is this right?”. Choose Fix it.'],
+    ['chart', 'Chart ranges (1M, 3M, 1Y, All)', ''],
+    ['delete', 'Delete a weigh-in', ''],
+  ] },
+  { id: 'body', title: 'Body', items: [
+    ['enable', 'Turn on Body in Settings', 'The Body tab should appear between Weight and Recipes.'],
+    ['tape', 'Tap each box: the tape lands in the right place', 'Try left and right sides if both are on.'],
+    ['filter', 'Show filter: All, Body Fat, BMI', 'Needs body fat and BMI estimates turned on.'],
+    ['estimates', 'Body fat and BMI estimates look right', ''],
+    ['save', 'Save a full set of measurements', 'The first full set becomes your measurement baseline.'],
+  ] },
+  { id: 'recipes', title: 'Recipes', items: [
+    ['import', 'Import a recipe from a site you use', 'Paste each part, review the USDA matches, save.'],
+    ['log', 'Log a portion of it on Today', ''],
+    ['swap', 'Swap an ingredient', 'Try a diet filter in the swap list, then Undo.'],
+    ['filters', 'Sort and filter the recipe list', 'By nutrient, diet, meal, fits remaining calories.'],
+    ['share', 'Share a recipe', 'Share sheet or download.'],
+  ] },
+  { id: 'goals', title: 'Goals', items: [
+    ['rings', 'Daily, weekly and monthly rings', ''],
+    ['baseline', 'Baseline card', 'Shows progress toward your first 7 weigh-ins.'],
+    ['trophies', 'Trophy Room', ''],
+    ['goalsettings', 'Turn on a couple of goals in Settings', 'Check their milestones show up as expected.'],
+  ] },
+  { id: 'reports', title: 'Reports', items: [
+    ['build', 'Make a report for a date range', ''],
+    ['pdf', 'Print, then Save as PDF', 'Not tested on iPhone yet.'],
+  ] },
+  { id: 'settings', title: 'Settings', items: [
+    ['usda', 'Enter a USDA key (optional)', 'It stays on this phone only. Skip if you don’t have one.'],
+    ['export', 'Export a backup', ''],
+    ['importbackup', 'Import the backup back in', ''],
+    ['readthrough', 'Read through every section', 'Wording, anything confusing or missing.'],
+  ] },
+  { id: 'phone', title: 'Phone-specific', items: [
+    ['keyboard', 'Keyboard doesn’t hide the box you’re typing in', ''],
+    ['textsize', 'Text size and tap targets feel right', ''],
+    ['tabbar', 'Bottom tab bar clears the gesture bar', ''],
+    ['dark', 'Dark mode', 'If you use it.'],
+    ['offline', 'Opens in airplane mode', 'Turn on airplane mode, close the app, reopen it.'],
+    ['rotate', 'Rotating the phone', ''],
+    ['update', 'Picks up a new version', 'After a fix is published: close the app fully and reopen it.'],
+  ] },
+];
+const DEVICES = { iphone: 'iPhone 18 Pro', s26: 'S26 Ultra' };
+const STATUSES = [['pass', 'Pass'], ['issue', 'Issue'], ['skip', 'N/A']];
+const LABEL = { pass: 'Pass', issue: 'Issue', skip: 'N/A' };
+const TOTAL = GROUPS.reduce((n, g) => n + g.items.length, 0);
+const KEY = 'phase1-phone-test';
+
+const $ = (id) => document.getElementById(id);
+let state = { tester: '', device: 'iphone', results: {} }; // results: 'group.item' -> {s, n}
+let issuesOnly = false;
+const openNotes = new Set();
+
+function load() {
+  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.results) state = { ...state, ...s }; } catch {}
+}
+let saveTimer = null;
+function save() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); $('status-line').textContent = 'Saved on this phone'; }
+    catch { $('status-line').textContent = 'Couldn’t save. Private browsing may be on.'; }
+  }, 300);
+}
+
+function el(tag, attrs = {}, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of children.flat()) if (c != null && c !== false) e.append(c instanceof Node ? c : document.createTextNode(c));
+  return e;
+}
+
+const result = (key) => state.results[key] || {};
+function setResult(key, patch) {
+  const next = { ...result(key), ...patch };
+  if (!next.s && !next.n) delete state.results[key]; else state.results[key] = next;
+  save();
+}
+
+function noteBox(key, label, placeholder) {
+  const t = el('textarea', { id: `note-${key}`, 'aria-label': label, placeholder,
+    oninput: (e) => { setResult(key, { n: e.target.value }); } });
+  t.value = result(key).n || '';
+  return t;
+}
+
+function render() {
+  $('issues-only').setAttribute('aria-pressed', String(issuesOnly));
+  let pass = 0, issue = 0, skip = 0;
+  const main = $('groups');
+  main.replaceChildren();
+  for (const g of GROUPS) {
+    let done = 0;
+    const list = el('ul', { class: 'items' });
+    for (const [item, title, hint] of g.items) {
+      const key = `${g.id}.${item}`;
+      const r = result(key);
+      if (r.s === 'pass') pass++; if (r.s === 'issue') issue++; if (r.s === 'skip') skip++;
+      if (r.s) done++;
+      if (issuesOnly && r.s !== 'issue') continue;
+      const showNote = openNotes.has(key) || r.s === 'issue' || (r.n || '').trim() !== '';
+      list.append(el('li', { class: 'item', 'data-status': r.s || '' },
+        el('div', { class: 'item-text' }, el('strong', {}, title), hint && el('small', {}, hint)),
+        el('div', { class: 'actions', role: 'group', 'aria-label': `Result for ${title}` },
+          STATUSES.map(([s, label]) => el('button', { type: 'button', class: `status ${s}`, 'aria-pressed': String(r.s === s),
+            onclick: () => { if (s === 'issue') openNotes.add(key); setResult(key, { s: r.s === s ? '' : s }); render(); } }, label)),
+          !showNote && el('button', { type: 'button', class: 'note-btn', onclick: () => { openNotes.add(key); render(); $(`note-${key}`)?.focus(); } }, '+ Note')),
+        showNote && noteBox(key, `Note for ${title}`, r.s === 'issue' ? 'What’s wrong, and what would you change?' : 'Add a note')));
+    }
+    const sKey = `${g.id}.notes`;
+    const hasNote = (result(sKey).n || '').trim() !== '';
+    if (issuesOnly && !list.children.length && !hasNote) continue;
+    main.append(el('section', { class: 'group', 'aria-labelledby': `h-${g.id}` },
+      el('div', { class: 'group-head' }, el('h2', { id: `h-${g.id}` }, g.title), el('span', { class: 'count' }, `${done} of ${g.items.length}`)),
+      list,
+      (!issuesOnly || hasNote) && el('div', { class: 'section-notes' },
+        el('label', { for: `note-${sKey}` }, 'Other notes'), noteBox(sKey, `Other notes for ${g.title}`, 'Anything else on this tab'))));
+  }
+  if (issuesOnly && !main.children.length) main.append(el('p', { class: 'empty' }, 'No issues marked yet.'));
+  const checked = pass + issue + skip;
+  $('progress-text').replaceChildren(
+    el('span', {}, el('strong', {}, `${checked} of ${TOTAL}`), ' checked'),
+    el('span', {}, `${pass} pass`), el('span', {}, `${issue} ${issue === 1 ? 'issue' : 'issues'}`), el('span', {}, `${skip} N/A`));
+  $('bar-p').style.width = `${(pass / TOTAL) * 100}%`;
+  $('bar-i').style.width = `${(issue / TOTAL) * 100}%`;
+  $('bar-s').style.width = `${(skip / TOTAL) * 100}%`;
+}
+
+// The message: a readable summary, then the full results as data Claude loads into Josh's checklist.
+function resultsText() {
+  const lines = [`Weight Tracker – Phase 1 phone test (${DEVICES[state.device]})`];
+  if (state.tester.trim()) lines.push(`Tester: ${state.tester.trim()}`);
+  const all = Object.values(state.results);
+  const n = (s) => all.filter((r) => r.s === s).length;
+  lines.push(`${n('pass') + n('issue') + n('skip')} of ${TOTAL} checked · ${n('pass')} pass · ${n('issue')} ${n('issue') === 1 ? 'issue' : 'issues'} · ${n('skip')} N/A`, '');
+  for (const g of GROUPS) {
+    const rows = [];
+    for (const [item, title] of g.items) {
+      const r = result(`${g.id}.${item}`);
+      if (r.s === 'issue' || (r.n || '').trim()) rows.push(`- ${title}: ${LABEL[r.s] || 'Not checked'}${(r.n || '').trim() ? ` – ${r.n.trim()}` : ''}`);
+    }
+    const other = (result(`${g.id}.notes`).n || '').trim();
+    if (other) rows.push(`- Other notes: ${other}`);
+    if (rows.length) lines.push(`${g.title.toUpperCase()}`, ...rows, '');
+  }
+  lines.push('--- Data for Claude (keep this part) ---',
+    JSON.stringify({ v: 1, device: state.device, tester: state.tester.trim(), results: state.results }));
+  return lines.join('\n');
+}
+
+async function send() {
+  const text = resultsText();
+  if (navigator.share) {
+    try { await navigator.share({ title: 'Phase 1 phone test results', text }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  $('sheet-text').value = text;
+  $('sheet').hidden = false;
+  $('sheet').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+$('send').addEventListener('click', send);
+$('copy').addEventListener('click', async () => {
+  const t = $('sheet-text');
+  try { await navigator.clipboard.writeText(t.value); $('copy').textContent = 'Copied'; }
+  catch { t.focus(); t.select(); $('copy').textContent = 'Selected – tap Copy'; }
+});
+$('close-sheet').addEventListener('click', () => { $('sheet').hidden = true; });
+$('issues-only').addEventListener('click', () => { issuesOnly = !issuesOnly; render(); });
+$('tester').addEventListener('input', (e) => { state.tester = e.target.value; save(); });
+$('device').addEventListener('change', (e) => { state.device = e.target.value; save(); });
+
+load();
+$('tester').value = state.tester;
+$('device').value = DEVICES[state.device] ? state.device : 'iphone';
+render();
+</script>
+</body>
+</html>
